@@ -1,11 +1,10 @@
 import re
 import pandas as pd
+import streamlit as st
+from io import BytesIO
 
-# ===== عدّل هنا =====
-FILE = "التقارير.xlsx"
-SHEET_AGENTS = "الوكلاء"
-SHEET_DIST = "التوزيع"
-# ====================
+st.set_page_config(page_title="تقرير التوزيع", layout="wide")
+st.title("تقرير التوزيع حسب المكتب")
 
 def last10(num):
     if pd.isna(num):
@@ -24,39 +23,56 @@ item_map = {
     "nms-1 million coin silver": "خط يوز مليوني",
 }
 
-agents = pd.read_excel(FILE, sheet_name=SHEET_AGENTS, dtype=str)
-dist = pd.read_excel(FILE, sheet_name=SHEET_DIST, dtype=str)
+uploaded = st.file_uploader("ارفع ملف التقارير (إكسل)", type=["xlsx", "xls"])
 
-# الوكلاء: A = رقم المكتب، B = اسم المكتب
-agents_df = pd.DataFrame({
-    "key": agents.iloc[:, 0].apply(last10),
-    "اسم المكتب": agents.iloc[:, 1],
-}).dropna(subset=["key"]).drop_duplicates("key")
+if uploaded:
+    xls = pd.ExcelFile(uploaded)
+    sheets = xls.sheet_names
 
-# التوزيع: C = الصنف، E = الحالة، F = رقم المكتب
-d = pd.DataFrame({
-    "item": dist.iloc[:, 2].str.strip().str.lower(),
-    "status": dist.iloc[:, 4].str.strip().str.lower(),
-    "key": dist.iloc[:, 5].apply(last10),
-})
+    c1, c2 = st.columns(2)
+    sheet_agents = c1.selectbox("شيت الوكلاء", sheets, index=0)
+    sheet_dist = c2.selectbox("شيت التوزيع", sheets, index=min(1, len(sheets) - 1))
 
-# فلتر Distributed + تصنيف + تجاهل الأصناف الأخرى
-d = d[d["status"] == "distributed"].copy()
-d["الصنف"] = d["item"].map(item_map)
-d = d.dropna(subset=["الصنف"])
+    if st.button("احسب"):
+        agents = pd.read_excel(xls, sheet_name=sheet_agents, dtype=str)
+        dist = pd.read_excel(xls, sheet_name=sheet_dist, dtype=str)
 
-# الربط بالمكتب
-merged = d.merge(agents_df, on="key", how="left")
-print("صفوف ما انطبقت على مكتب:", merged["اسم المكتب"].isna().sum())
+        # الوكلاء: A = رقم المكتب، B = اسم المكتب
+        agents_df = pd.DataFrame({
+            "key": agents.iloc[:, 0].apply(last10),
+            "اسم المكتب": agents.iloc[:, 1],
+        }).dropna(subset=["key"]).drop_duplicates("key")
 
-# شيت واحد: صف لكل مكتب، عمود لكل صنف
-result = pd.crosstab(
-    [merged["key"], merged["اسم المكتب"].fillna("غير مطابق")],
-    merged["الصنف"],
-)
-result["المجموع"] = result.sum(axis=1)
-result = result.sort_values("المجموع", ascending=False).reset_index()
-result = result.rename(columns={"key": "رقم المكتب"})
+        # التوزيع: C = الصنف، E = الحالة، F = رقم المكتب
+        d = pd.DataFrame({
+            "item": dist.iloc[:, 2].str.strip().str.lower(),
+            "status": dist.iloc[:, 4].str.strip().str.lower(),
+            "key": dist.iloc[:, 5].apply(last10),
+        })
 
-result.to_excel("نتيجة_التوزيع.xlsx", index=False)
-print(result)
+        d = d[d["status"] == "distributed"].copy()
+        d["الصنف"] = d["item"].map(item_map)
+        d = d.dropna(subset=["الصنف"])
+
+        merged = d.merge(agents_df, on="key", how="left")
+        unmatched = int(merged["اسم المكتب"].isna().sum())
+
+        result = pd.crosstab(
+            [merged["key"], merged["اسم المكتب"].fillna("غير مطابق")],
+            merged["الصنف"],
+        )
+        result["المجموع"] = result.sum(axis=1)
+        result = result.sort_values("المجموع", ascending=False).reset_index()
+        result = result.rename(columns={"key": "رقم المكتب"})
+
+        st.success(f"تم. عدد المكاتب: {len(result)} | صفوف غير مطابقة: {unmatched}")
+        st.dataframe(result, use_container_width=True)
+
+        buf = BytesIO()
+        result.to_excel(buf, index=False)
+        st.download_button(
+            "تحميل النتيجة (إكسل)",
+            data=buf.getvalue(),
+            file_name="نتيجة_التوزيع.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
