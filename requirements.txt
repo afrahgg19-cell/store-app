@@ -1,4 +1,5 @@
-streamlit
-pandas
-openpyxl==3.1.5
-xlrd
+   streamlit
+   pandas
+   openpyxl==3.1.5
+   xlrd
+   lxml
