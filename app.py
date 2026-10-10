@@ -90,7 +90,6 @@ def last10(num):
 
 
 def clean_code(val):
-    # turns 93.0 or " 93 " into "93"
     if pd.isna(val):
         return None
     s = str(val).strip()
@@ -100,7 +99,6 @@ def clean_code(val):
 
 
 def detect_kind(raw):
-    # يعرف نوع الملف من بدايته، مو من امتداده
     head = raw[:2048]
     if head[:4] == b"PK\x03\x04":
         return "xlsx"
@@ -113,4 +111,72 @@ def detect_kind(raw):
 
 
 def decode_text(raw):
-    for enc in ("utf-8-sig", "utf-16", "cp1256", "latin-1"):
+    if raw[:3] == b"\xef\xbb\xbf":
+        return raw.decode("utf-8-sig", errors="ignore")
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return raw.decode("utf-16", errors="ignore")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("cp1256", errors="ignore")
+
+
+def read_any(raw, kind):
+    if kind == "xlsx":
+        return pd.read_excel(BytesIO(raw), sheet_name=None, dtype=str, engine="openpyxl")
+    if kind == "xls":
+        return pd.read_excel(BytesIO(raw), sheet_name=None, dtype=str, engine="xlrd")
+    text = decode_text(raw)
+    if kind == "html":
+        tables = pd.read_html(StringIO(text), flavor="lxml")
+        return {"sheet1": tables[0].astype(str).replace("nan", pd.NA)}
+    head = text[:4096]
+    sep = ","
+    if head.count("\t") > head.count(","):
+        sep = "\t"
+    return {"sheet1": pd.read_csv(StringIO(text), sep=sep, dtype=str)}
+
+
+def load_report(file, label):
+    raw = file.getvalue()
+    kind = detect_kind(raw)
+    try:
+        return read_any(raw, kind)
+    except Exception as e:
+        st.error(T["read_fail"] + " (" + label + "): " + str(e))
+        st.stop()
+
+
+def pick_sheet(sheets, label):
+    names = list(sheets.keys())
+    if len(names) == 1:
+        return sheets[names[0]]
+    chosen = st.selectbox(T["sheet"] + " " + label, names, key="sheet_" + label)
+    return sheets[chosen]
+
+
+c1, c2, c3 = st.columns(3)
+with c1:
+    agents_file = st.file_uploader(T["up_agents"], key="agents")
+with c2:
+    dist_file = st.file_uploader(T["up_dist"], key="dist")
+with c3:
+    quality_file = st.file_uploader(T["up_quality"], key="quality")
+
+if agents_file is not None and dist_file is not None:
+    with c1:
+        agents = pick_sheet(load_report(agents_file, T["agents"]), T["agents"])
+    with c2:
+        dist = pick_sheet(load_report(dist_file, T["dist"]), T["dist"])
+    q = None
+    if quality_file is not None:
+        with c3:
+            q = pick_sheet(load_report(quality_file, T["quality"]), T["quality"])
+
+    if st.button(T["calc"]):
+        # Agents: B = office number, A = office name
+        agents_df = pd.DataFrame({
+            "key": agents.iloc[:, 1].apply(last10),
+            T["office_name"]: agents.iloc[:, 0],
+        })
+        agents_df = agents_df.dropna(subset=["key"]).drop_duplicates("key")
