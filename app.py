@@ -6,11 +6,13 @@ from io import BytesIO
 st.set_page_config(page_title="تقرير التوزيع", layout="wide")
 st.title("تقرير التوزيع حسب المكتب")
 
+
 def last10(num):
     if pd.isna(num):
         return None
     s = re.sub(r"\D", "", str(num))
     return s[-10:] if s else None
+
 
 item_map = {
     "pre-paid sim card - type2": "ريد",
@@ -23,12 +25,14 @@ item_map = {
     "nms-1 million coin silver": "خط يوز مليوني",
 }
 
+
 def pick_sheet(file, label):
-    """يرجع اسم الشيت: إذا الملف فيه شيت واحد ياخذه، وإذا أكثر يخلي المستخدم يختار"""
+    """إذا الملف فيه شيت واحد ياخذه، وإذا أكثر يخلي المستخدم يختار"""
     xls = pd.ExcelFile(file)
     if len(xls.sheet_names) == 1:
         return xls, xls.sheet_names[0]
-    return xls, st.selectbox(f"شيت {label}", xls.sheet_names)
+    return xls, st.selectbox(f"شيت {label}", xls.sheet_names, key=f"sheet_{label}")
+
 
 c1, c2 = st.columns(2)
 with c1:
@@ -46,6 +50,16 @@ if agents_file and dist_file:
         agents = pd.read_excel(xls_a, sheet_name=sheet_a, dtype=str)
         dist = pd.read_excel(xls_d, sheet_name=sheet_d, dtype=str)
 
+        # ===== تشخيص (احذفه بعد ما يشتغل الكود) =====
+        with st.expander("تشخيص: شنو انقرأ من الملفات", expanded=True):
+            st.write("أعمدة الوكلاء:", list(agents.columns), "| عدد الصفوف:", len(agents))
+            st.write("أعمدة التوزيع:", list(dist.columns), "| عدد الصفوف:", len(dist))
+            st.write("عينة من الوكلاء:")
+            st.dataframe(agents.head(5))
+            st.write("عينة من التوزيع:")
+            st.dataframe(dist.head(5))
+        # ============================================
+
         # الوكلاء: A = رقم المكتب، B = اسم المكتب
         agents_df = pd.DataFrame({
             "key": agents.iloc[:, 0].apply(last10),
@@ -54,9 +68,43 @@ if agents_file and dist_file:
 
         # التوزيع: C = الصنف، E = الحالة، F = رقم المكتب
         d = pd.DataFrame({
-            "item": dist.iloc[:, 2].str.strip().str.lower(),
-            "status": dist.iloc[:, 4].str.strip().str.lower(),
+            "item": dist.iloc[:, 2].astype(str).str.strip().str.lower(),
+            "status": dist.iloc[:, 4].astype(str).str.strip().str.lower(),
             "key": dist.iloc[:, 5].apply(last10),
         })
 
+        st.write("قيم عمود E الموجودة:", d["status"].value_counts().head(10).to_dict())
         d = d[d["status"] == "distributed"].copy()
+        st.write("صفوف بعد فلتر Distributed:", len(d))
+
+        st.write("قيم عمود C الموجودة:", d["item"].value_counts().head(15).to_dict())
+        d["الصنف"] = d["item"].map(item_map)
+        d = d.dropna(subset=["الصنف"])
+        st.write("صفوف بعد تصنيف الأصناف:", len(d))
+
+        if d.empty:
+            st.error("ما بقى أي صف بعد الفلترة. شوف القيم اللي ظهرت فوق وقارنها بالأسماء.")
+            st.stop()
+
+        merged = d.merge(agents_df, on="key", how="left")
+        unmatched = int(merged["اسم المكتب"].isna().sum())
+
+        result = pd.crosstab(
+            [merged["key"], merged["اسم المكتب"].fillna("غير مطابق")],
+            merged["الصنف"],
+        )
+        result["المجموع"] = result.sum(axis=1)
+        result = result.sort_values("المجموع", ascending=False).reset_index()
+        result = result.rename(columns={"key": "رقم المكتب"})
+
+        st.success(f"تم. عدد المكاتب: {len(result)} | صفوف غير مطابقة: {unmatched}")
+        st.dataframe(result, use_container_width=True)
+
+        buf = BytesIO()
+        result.to_excel(buf, index=False)
+        st.download_button(
+            "تحميل النتيجة (إكسل)",
+            data=buf.getvalue(),
+            file_name="نتيجة_التوزيع.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
