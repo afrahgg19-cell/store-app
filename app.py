@@ -9,9 +9,11 @@ T = {
     "title": "\u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u062a\u0648\u0632\u064a\u0639 \u062d\u0633\u0628 \u0627\u0644\u0645\u0643\u062a\u0628",
     "up_agents": "\u0627\u0631\u0641\u0639 \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0648\u0643\u0644\u0627\u0621",
     "up_dist": "\u0627\u0631\u0641\u0639 \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u062a\u0648\u0632\u064a\u0639",
+    "up_quality": "\u0627\u0631\u0641\u0639 \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0643\u0648\u0627\u0644\u062a\u064a",
     "sheet": "\u0634\u064a\u062a",
     "agents": "\u0627\u0644\u0648\u0643\u0644\u0627\u0621",
     "dist": "\u0627\u0644\u062a\u0648\u0632\u064a\u0639",
+    "quality": "\u0627\u0644\u0643\u0648\u0627\u0644\u062a\u064a",
     "calc": "\u0627\u062d\u0633\u0628",
     "office_name": "\u0627\u0633\u0645 \u0627\u0644\u0645\u0643\u062a\u0628",
     "office_no": "\u0631\u0642\u0645 \u0627\u0644\u0645\u0643\u062a\u0628",
@@ -27,6 +29,15 @@ T = {
     "bad_dates": "\u062a\u0648\u0627\u0631\u064a\u062e \u063a\u064a\u0631 \u0645\u0642\u0631\u0648\u0621\u0629",
     "download": "\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0646\u062a\u064a\u062c\u0629 (\u0625\u0643\u0633\u0644)",
     "file_name": "distribution_result.xlsx",
+    "act_red": "\u062a\u0641\u0639\u064a\u0644 \u0643\u0644\u064a \u0631\u064a\u062f",
+    "act_use": "\u062a\u0641\u0639\u064a\u0644 \u0643\u0644\u064a \u064a\u0648\u0632",
+    "act_net": "\u062a\u0641\u0639\u064a\u0644 \u0643\u0644\u064a \u0646\u062a",
+    "last_ru": "\u062a\u0641\u0639\u064a\u0644 \u0622\u062e\u0631 \u064a\u0648\u0645 (\u0631\u064a\u062f + \u064a\u0648\u0632)",
+    "last_net": "\u062a\u0641\u0639\u064a\u0644 \u0622\u062e\u0631 \u064a\u0648\u0645 (\u0646\u062a)",
+    "q_info": "\u0627\u0644\u0643\u0648\u0627\u0644\u062a\u064a: \u0639\u062f\u062f \u0627\u0644\u0635\u0641\u0648\u0641",
+    "q_last": "\u0622\u062e\u0631 \u064a\u0648\u0645",
+    "q_ignored": "\u0635\u0641\u0648\u0641 \u0645\u062a\u062c\u0627\u0647\u0644\u0629 (\u0646\u0648\u0639 \u063a\u064a\u0631 \u0645\u0639\u0631\u0648\u0641)",
+    "q_baddate": "\u062a\u0648\u0627\u0631\u064a\u062e \u0643\u0648\u0627\u0644\u062a\u064a \u063a\u064a\u0631 \u0645\u0642\u0631\u0648\u0621\u0629",
 }
 
 # الاصناف: Red, Use, Monthly, Daily net, Big router, Small mifi, 1M use
@@ -49,6 +60,19 @@ item_map = {
     "nms-1 million coin silver": USE_1M,
 }
 
+# Quality report: column B code -> group
+QUALITY_TYPE = {
+    "2": "net",
+    "93": "red",
+    "4": "red",
+    "32": "use",
+}
+
+# Quality report columns by position (A=0, B=1, C=2, D=3, ...)
+Q_TYPE_COL = 1      # B = line type code
+Q_OFFICE_COL = 2    # C = office number
+DATE_COL = 3        # D = activation date (CHANGE THIS if the date is in another column)
+
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 st.set_page_config(page_title=T["page"], layout="wide")
@@ -64,6 +88,16 @@ def last10(num):
     return None
 
 
+def clean_code(val):
+    # turns 93.0 or " 93 " into "93"
+    if pd.isna(val):
+        return None
+    s = str(val).strip()
+    if s.endswith(".0"):
+        s = s[:-2]
+    return s
+
+
 def pick_sheet(file, label):
     xls = pd.ExcelFile(file)
     if len(xls.sheet_names) == 1:
@@ -72,17 +106,22 @@ def pick_sheet(file, label):
     return xls, chosen
 
 
-c1, c2 = st.columns(2)
+c1, c2, c3 = st.columns(3)
 with c1:
     agents_file = st.file_uploader(T["up_agents"], type=["xlsx", "xls"], key="agents")
 with c2:
     dist_file = st.file_uploader(T["up_dist"], type=["xlsx", "xls"], key="dist")
+with c3:
+    quality_file = st.file_uploader(T["up_quality"], type=["xlsx", "xls"], key="quality")
 
 if agents_file is not None and dist_file is not None:
     with c1:
         xls_a, sheet_a = pick_sheet(agents_file, T["agents"])
     with c2:
         xls_d, sheet_d = pick_sheet(dist_file, T["dist"])
+    if quality_file is not None:
+        with c3:
+            xls_q, sheet_q = pick_sheet(quality_file, T["quality"])
 
     if st.button(T["calc"]):
         agents = pd.read_excel(xls_a, sheet_name=sheet_a, dtype=str)
@@ -132,6 +171,74 @@ if agents_file is not None and dist_file is not None:
         result = result.sort_values(T["total"], ascending=False).reset_index()
         result = result.rename(columns={"key": T["office_no"]})
 
+        # ===== Quality report (optional third upload) =====
+        q_msg = None
+        if quality_file is not None:
+            q = pd.read_excel(xls_q, sheet_name=sheet_q, dtype=str)
+
+            qd = pd.DataFrame({
+                "group": q.iloc[:, Q_TYPE_COL].apply(clean_code).map(QUALITY_TYPE),
+                "key": q.iloc[:, Q_OFFICE_COL].apply(last10),
+                "date": pd.to_datetime(q.iloc[:, DATE_COL], errors="coerce"),
+            })
+
+            q_total = len(qd)
+            q_ignored = int(qd["group"].isna().sum())
+            q_baddate = int(qd["date"].isna().sum())
+
+            qd = qd.dropna(subset=["group", "key"]).copy()
+
+            # all-time activation per group
+            tot = pd.crosstab(qd["key"], qd["group"])
+            for g in ["red", "use", "net"]:
+                if g not in tot.columns:
+                    tot[g] = 0
+            tot = tot[["red", "use", "net"]]
+            tot.columns = [T["act_red"], T["act_use"], T["act_net"]]
+
+            # last day activation
+            qdd = qd.dropna(subset=["date"]).copy()
+            if qdd.empty:
+                last_day = None
+                last_tbl = pd.DataFrame(columns=[T["last_ru"], T["last_net"]])
+            else:
+                qdd["day"] = qdd["date"].dt.normalize()
+                last_day = qdd["day"].max()
+                ld = qdd[qdd["day"] == last_day]
+                ru = ld[ld["group"].isin(["red", "use"])].groupby("key").size()
+                nt = ld[ld["group"] == "net"].groupby("key").size()
+                last_tbl = pd.DataFrame({T["last_ru"]: ru, T["last_net"]: nt})
+
+            q_all = tot.join(last_tbl, how="outer").fillna(0).astype(int)
+            q_all.index.name = T["office_no"]
+            q_all = q_all.reset_index()
+
+            # rename last-day columns to include the actual date
+            if last_day is not None:
+                day_txt = str(last_day.date())
+                q_all = q_all.rename(columns={
+                    T["last_ru"]: T["last_ru"] + " " + day_txt,
+                    T["last_net"]: T["last_net"] + " " + day_txt,
+                })
+
+            result = result.merge(q_all, on=T["office_no"], how="outer")
+
+            # fill office names for offices that only exist in quality
+            name_map = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
+            result[T["office_name"]] = result[T["office_name"]].fillna(
+                result[T["office_no"]].map(name_map)
+            ).fillna(T["unmatched"])
+
+            num_cols = [c for c in result.columns if c not in (T["office_no"], T["office_name"])]
+            result[num_cols] = result[num_cols].fillna(0).astype(int)
+
+            q_msg = (
+                T["q_info"] + ": " + str(q_total)
+                + " | " + T["q_ignored"] + ": " + str(q_ignored)
+                + " | " + T["q_baddate"] + ": " + str(q_baddate)
+                + " | " + T["q_last"] + ": " + (str(last_day.date()) if last_day is not None else "-")
+            )
+
         st.success(T["done"] + ": " + str(len(result)) + " | " + T["unm_rows"] + ": " + str(unmatched))
         st.info(
             T["orig"] + ": " + str(total_rows)
@@ -139,6 +246,8 @@ if agents_file is not None and dist_file is not None:
             + " | " + T["real"] + ": " + str(len(d))
             + " | " + T["bad_dates"] + ": " + str(bad_dates)
         )
+        if q_msg is not None:
+            st.info(q_msg)
         st.dataframe(result, use_container_width=True)
 
         buf = BytesIO()
