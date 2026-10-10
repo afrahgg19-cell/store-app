@@ -56,32 +56,30 @@ if agents_file and dist_file:
             "اسم المكتب": agents.iloc[:, 0],
         }).dropna(subset=["key"]).drop_duplicates("key")
 
-        # التوزيع: C = الصنف، E = الحالة، F = رقم المكتب
+        # التوزيع: A = رقم الخط، C = الصنف، E = الحالة، F = رقم المكتب، I = التاريخ
         d = pd.DataFrame({
+            "line": dist.iloc[:, 0].astype(str).str.strip(),
             "item": dist.iloc[:, 2].astype(str).str.strip().str.lower(),
             "status": dist.iloc[:, 4].astype(str).str.strip().str.lower(),
             "key": dist.iloc[:, 5].apply(last10),
+            "date": pd.to_datetime(dist.iloc[:, 8], errors="coerce"),
         })
 
-        # ===== تشخيص (احذفه بعد ما يشتغل الكود) =====
-        with st.expander("تشخيص", expanded=True):
-            st.write("أعمدة الوكلاء:", list(agents.columns))
-            st.dataframe(agents.head(5))
-            st.write("أعمدة التوزيع:", list(dist.columns))
-            st.dataframe(dist.head(5))
-            st.write("قيم عمود E:", d["status"].value_counts().head(10).to_dict())
-            st.write("رقم الوكلاء بعد last10:", agents_df["key"].head(5).tolist())
-            st.write("رقم التوزيع بعد last10:", d["key"].head(5).tolist())
-            common = set(agents_df["key"]) & set(d["key"].dropna())
-            st.write("عدد المفاتيح المشتركة:", len(common))
-        # ============================================
+        total_rows = len(d)
+        bad_dates = int(d["date"].isna().sum())
 
+        # نخلي آخر سجل (الاحدث تاريخ) لكل خط
+        d = d.sort_values("date", kind="stable")
+        d = d.drop_duplicates(subset="line", keep="last")
+        after_dedup = len(d)
+
+        # بعد ما صار عندنا آخر حالة لكل خط، نفلتر Distributed
         d = d[d["status"] == "distributed"].copy()
         d["الصنف"] = d["item"].map(item_map)
         d = d.dropna(subset=["الصنف"])
 
         if d.empty:
-            st.error("ما بقى أي صف بعد الفلترة. شوف قيم عمود E وأسماء الأصناف.")
+            st.error("ما بقى أي صف بعد الفلترة. تأكد من عمود E والأصناف.")
             st.stop()
 
         merged = d.merge(agents_df, on="key", how="left")
@@ -95,7 +93,13 @@ if agents_file and dist_file:
         result = result.sort_values("المجموع", ascending=False).reset_index()
         result = result.rename(columns={"key": "رقم المكتب"})
 
-        st.success(f"تم. عدد المكاتب: {len(result)} | صفوف غير مطابقة: {unmatched}")
+        st.success(
+            f"تم. عدد المكاتب: {len(result)} | صفوف غير مطابقة: {unmatched}"
+        )
+        st.info(
+            f"صفوف التوزيع الأصلية: {total_rows} | بعد إزالة المكرر (آخر تاريخ): {after_dedup} | "
+            f"الموزّع فعلياً: {len(d)} | تواريخ غير مقروءة: {bad_dates}"
+        )
         st.dataframe(result, use_container_width=True)
 
         buf = BytesIO()
@@ -104,5 +108,4 @@ if agents_file and dist_file:
             "تحميل النتيجة (إكسل)",
             data=buf.getvalue(),
             file_name="نتيجة_التوزيع.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+            mime="application/vnd.openxmlformats-officed
