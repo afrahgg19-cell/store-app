@@ -23,19 +23,28 @@ item_map = {
     "nms-1 million coin silver": "خط يوز مليوني",
 }
 
-uploaded = st.file_uploader("ارفع ملف التقارير (إكسل)", type=["xlsx", "xls"])
+def pick_sheet(file, label):
+    """يرجع اسم الشيت: إذا الملف فيه شيت واحد ياخذه، وإذا أكثر يخلي المستخدم يختار"""
+    xls = pd.ExcelFile(file)
+    if len(xls.sheet_names) == 1:
+        return xls, xls.sheet_names[0]
+    return xls, st.selectbox(f"شيت {label}", xls.sheet_names)
 
-if uploaded:
-    xls = pd.ExcelFile(uploaded)
-    sheets = xls.sheet_names
+c1, c2 = st.columns(2)
+with c1:
+    agents_file = st.file_uploader("ارفع تقرير الوكلاء", type=["xlsx", "xls"], key="agents")
+with c2:
+    dist_file = st.file_uploader("ارفع تقرير التوزيع", type=["xlsx", "xls"], key="dist")
 
-    c1, c2 = st.columns(2)
-    sheet_agents = c1.selectbox("شيت الوكلاء", sheets, index=0)
-    sheet_dist = c2.selectbox("شيت التوزيع", sheets, index=min(1, len(sheets) - 1))
+if agents_file and dist_file:
+    with c1:
+        xls_a, sheet_a = pick_sheet(agents_file, "الوكلاء")
+    with c2:
+        xls_d, sheet_d = pick_sheet(dist_file, "التوزيع")
 
     if st.button("احسب"):
-        agents = pd.read_excel(xls, sheet_name=sheet_agents, dtype=str)
-        dist = pd.read_excel(xls, sheet_name=sheet_dist, dtype=str)
+        agents = pd.read_excel(xls_a, sheet_name=sheet_a, dtype=str)
+        dist = pd.read_excel(xls_d, sheet_name=sheet_d, dtype=str)
 
         # الوكلاء: A = رقم المكتب، B = اسم المكتب
         agents_df = pd.DataFrame({
@@ -51,28 +60,3 @@ if uploaded:
         })
 
         d = d[d["status"] == "distributed"].copy()
-        d["الصنف"] = d["item"].map(item_map)
-        d = d.dropna(subset=["الصنف"])
-
-        merged = d.merge(agents_df, on="key", how="left")
-        unmatched = int(merged["اسم المكتب"].isna().sum())
-
-        result = pd.crosstab(
-            [merged["key"], merged["اسم المكتب"].fillna("غير مطابق")],
-            merged["الصنف"],
-        )
-        result["المجموع"] = result.sum(axis=1)
-        result = result.sort_values("المجموع", ascending=False).reset_index()
-        result = result.rename(columns={"key": "رقم المكتب"})
-
-        st.success(f"تم. عدد المكاتب: {len(result)} | صفوف غير مطابقة: {unmatched}")
-        st.dataframe(result, use_container_width=True)
-
-        buf = BytesIO()
-        result.to_excel(buf, index=False)
-        st.download_button(
-            "تحميل النتيجة (إكسل)",
-            data=buf.getvalue(),
-            file_name="نتيجة_التوزيع.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
