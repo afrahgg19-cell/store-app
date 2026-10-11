@@ -33,24 +33,24 @@ T = {
     "act_red": "\u062a\u0641\u0639\u064a\u0644 \u0643\u0644\u064a \u0631\u064a\u062f",
     "act_use": "\u062a\u0641\u0639\u064a\u0644 \u0643\u0644\u064a \u064a\u0648\u0632",
     "act_net": "\u062a\u0641\u0639\u064a\u0644 \u0643\u0644\u064a \u0646\u062a",
-    "last_ru": "\u062a\u0641\u0639\u064a\u0644 \u0622\u062e\u0631 \u064a\u0648\u0645 (\u0631\u064a\u062f + \u064a\u0648\u0632)",
-    "last_net": "\u062a\u0641\u0639\u064a\u0644 \u0622\u062e\u0631 \u064a\u0648\u0645 (\u0646\u062a)",
+    "last_ru": "\u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u062e\u0637 \u0627\u0644\u064a\u0648\u0645\u064a (\u064a\u0648\u0632 \u0648\u0631\u064a\u062f)",
+    "last_net": "\u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0646\u062a \u0627\u0644\u064a\u0648\u0645\u064a",
     "q_info": "\u0627\u0644\u0643\u0648\u0627\u0644\u062a\u064a: \u0639\u062f\u062f \u0627\u0644\u0635\u0641\u0648\u0641",
     "q_last": "\u0622\u062e\u0631 \u064a\u0648\u0645",
     "q_ignored": "\u0635\u0641\u0648\u0641 \u0645\u062a\u062c\u0627\u0647\u0644\u0629 (\u0646\u0648\u0639 \u063a\u064a\u0631 \u0645\u0639\u0631\u0648\u0641)",
     "q_baddate": "\u062a\u0648\u0627\u0631\u064a\u062e \u0643\u0648\u0627\u0644\u062a\u064a \u063a\u064a\u0631 \u0645\u0642\u0631\u0648\u0621\u0629",
     "pts_word": "\u0646\u0642\u0627\u0637",
-    "pts_ru": "\u0646\u0642\u0627\u0637 \u0643\u0644\u064a\u0629 (\u0631\u064a\u062f + \u064a\u0648\u0632)",
-    "pts_net": "\u0646\u0642\u0627\u0637 \u0643\u0644\u064a\u0629 \u0646\u062a",
-    "pts_last_ru": "\u0646\u0642\u0627\u0637 \u0622\u062e\u0631 \u064a\u0648\u0645 (\u0631\u064a\u062f + \u064a\u0648\u0632)",
-    "pts_last_net": "\u0646\u0642\u0627\u0637 \u0622\u062e\u0631 \u064a\u0648\u0645 (\u0646\u062a)",
+    "pts_ru": "\u0646\u0642\u0627\u0637 \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0627\u0644\u0643\u0644\u064a\u0629",
+    "pts_net": "\u0646\u0642\u0627\u0637 \u0627\u0644\u0646\u062a \u0627\u0644\u0643\u0644\u064a\u0629",
+    "pts_last_ru": "\u0646\u0642\u0627\u0637 \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0627\u0644\u064a\u0648\u0645\u064a\u0629",
+    "pts_last_net": "\u0646\u0642\u0627\u0637 \u0627\u0644\u0646\u062a \u0627\u0644\u064a\u0648\u0645\u064a\u0629",
     "up_inc": "\u0627\u0631\u0641\u0639 \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u062d\u0627\u0641\u0632",
-    "inc": "\u0627\u0644\u062d\u0627\u0641\u0632",
+    "inc": "\u062d\u0627\u0641\u0632",
     "inc_info": "\u0627\u0644\u062d\u0627\u0641\u0632: \u0639\u062f\u062f \u0627\u0644\u0635\u0641\u0648\u0641",
     "inc_after": "\u0628\u0639\u062f \u0625\u0632\u0627\u0644\u0629 \u0627\u0644\u0635\u0641\u0631",
     "inc_offices": "\u0645\u0643\u0627\u062a\u0628 \u0628\u0627\u0644\u062d\u0627\u0641\u0632",
     "up_wal": "\u0627\u0631\u0641\u0639 \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0645\u062d\u0627\u0641\u0638",
-    "wal": "\u0627\u0644\u0645\u062d\u0627\u0641\u0638",
+    "wal": "\u0645\u062d\u0641\u0638\u0629",
     "wal_info": "\u0627\u0644\u0645\u062d\u0627\u0641\u0638: \u0639\u062f\u062f \u0627\u0644\u0635\u0641\u0648\u0641",
     "wal_after": "\u0628\u0639\u062f \u0641\u0644\u062a\u0631 Y",
     "wal_offices": "\u0645\u0643\u0627\u062a\u0628 \u0628\u0627\u0644\u0645\u062d\u0627\u0641\u0638",
@@ -61,10 +61,10 @@ T = {
 
 RED = "\u0631\u064a\u062f"
 USE = "\u064a\u0648\u0632"
-MONTHLY = "\u062e\u0637 \u0634\u0647\u0631\u064a"
-DAILY = "\u062e\u0637 \u0646\u062a \u064a\u0648\u0645\u064a"
+MONTHLY = "\u0646\u062a \u0634\u0647\u0631\u064a"
+DAILY = "\u0646\u062a \u064a\u0648\u0645\u064a"
 BIG_ROUTER = "\u0631\u0627\u0648\u062a\u0631 \u0643\u0628\u064a\u0631"
-SMALL_MIFI = "\u0645\u0627\u064a \u0641\u0627\u064a \u0635\u063a\u064a\u0631"
+SMALL_MIFI = "\u0631\u0627\u0648\u062a\u0631 \u0635\u063a\u064a\u0631"
 USE_1M = "\u062e\u0637 \u064a\u0648\u0632 \u0645\u0644\u064a\u0648\u0646\u064a"
 
 item_map = {
@@ -204,7 +204,10 @@ def compute(agents, dist, q, inc=None, wal=None):
         [merged["key"], merged[T["office_name"]].fillna(T["unmatched"])],
         merged[T["item"]],
     )
-    result[T["total"]] = result.sum(axis=1)
+    for col in [RED, USE, DAILY, MONTHLY, BIG_ROUTER, SMALL_MIFI]:
+        if col not in result.columns:
+            result[col] = 0
+    result[T["total"]] = result[RED] + result[USE]
     result = result.sort_values(T["total"], ascending=False).reset_index()
     result = result.rename(columns={"key": T["office_no"]})
 
@@ -376,6 +379,24 @@ def compute(agents, dist, q, inc=None, wal=None):
             + " | " + T["wal_offices"] + ": " + str(len(wal_keys))
         )
 
+    order_base = [
+        T["office_name"], T["office_no"],
+        RED, USE, DAILY, MONTHLY, BIG_ROUTER, SMALL_MIFI,
+        T["total"],
+        T["act_red"], T["act_use"], T["act_net"],
+        T["last_ru"], T["last_net"],
+        T["pts_ru"], T["pts_net"], T["pts_last_ru"], T["pts_last_net"],
+        T["inc"], T["wal"],
+    ]
+    ordered = []
+    for base in order_base:
+        for c in result.columns:
+            if c == base or str(c).startswith(base + " "):
+                if c not in ordered:
+                    ordered.append(c)
+    rest = [c for c in result.columns if c not in ordered]
+    result = result[ordered + rest]
+
     st.success(T["done"] + ": " + str(len(result)) + " | " + T["unm_rows"] + ": " + str(unmatched))
     st.info(
         T["orig"] + ": " + str(total_rows)
@@ -390,6 +411,66 @@ def compute(agents, dist, q, inc=None, wal=None):
     if wal_msg is not None:
         st.info(wal_msg)
     return result
+
+
+# ===== formatting settings (change here) =====
+FONT_SIZE = 14
+COL_WIDTH = 24
+GRAY_BODY = "D9D9D9"
+GRAY_HEADER = "A6A6A6"
+YELLOW = "FFFF00"
+
+
+def format_excel(df):
+    # writes df to xlsx bytes: gray cells, yellow first column, borders,
+    # centered text, equal column widths, font size 14
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    buf = BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Sheet1")
+        ws = writer.sheets["Sheet1"]
+
+        thin = Side(style="thin", color="000000")
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        gray_body = PatternFill("solid", start_color=GRAY_BODY, end_color=GRAY_BODY)
+        gray_head = PatternFill("solid", start_color=GRAY_HEADER, end_color=GRAY_HEADER)
+        yellow = PatternFill("solid", start_color=YELLOW, end_color=YELLOW)
+
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+            for cell in row:
+                is_header = cell.row == 1
+                cell.font = Font(size=FONT_SIZE, bold=is_header)
+                cell.alignment = center
+                cell.border = border
+                if cell.column == 1:
+                    cell.fill = yellow
+                elif is_header:
+                    cell.fill = gray_head
+                else:
+                    cell.fill = gray_body
+
+        for i in range(1, ws.max_column + 1):
+            ws.column_dimensions[get_column_letter(i)].width = COL_WIDTH
+        ws.row_dimensions[1].height = 70
+        ws.freeze_panes = "B2"
+    return buf.getvalue()
+
+
+def style_screen(df):
+    # on-screen version of the same look (colors + centered text)
+    first = df.columns[0]
+    sty = df.style.set_properties(**{
+        "background-color": "#D9D9D9",
+        "color": "black",
+        "text-align": "center",
+        "font-size": "14px",
+        "border": "1px solid black",
+    })
+    sty = sty.set_properties(subset=[first], **{"background-color": "#FFFF00"})
+    return sty
 
 
 st.title(T["title"])
@@ -457,12 +538,14 @@ if agents_file is not None and dist_file is not None:
             try:
                 result = compute(agents, dist, q, inc, wal)
                 if result is not None:
-                    st.dataframe(result, use_container_width=True)
-                    buf = BytesIO()
-                    result.to_excel(buf, index=False)
+                    try:
+                        st.dataframe(style_screen(result), use_container_width=True)
+                    except Exception:
+                        st.dataframe(result, use_container_width=True)
+                    xlsx_bytes = format_excel(result)
                     st.download_button(
                         T["download"],
-                        data=buf.getvalue(),
+                        data=xlsx_bytes,
                         file_name=T["file_name"],
                         mime=XLSX_MIME,
                     )
