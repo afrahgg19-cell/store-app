@@ -70,6 +70,7 @@ T = {
     "dist_type": "\u0646\u0648\u0639 \u0627\u0644\u062a\u0648\u0632\u064a\u0639",
     "bundle_lbl": "\u0627\u0644\u0628\u0627\u0642\u0629",
     "mm_sheet": "\u0628\u0627\u0642\u0627\u062a \u0645\u062e\u0627\u0644\u0641\u0629",
+    "bnd_empty": "\u0645\u0627 \u0644\u0642\u064a\u062a \u0628\u0627\u0642\u0627\u062a \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u062e\u0637\u0648\u0637 \u0645\u0648\u0632\u0639\u0629",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -527,6 +528,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
 
     bnd_msg = None
     bnd_warn = None
+    bundle_df = None
     mismatch_df = None
     if bnd is not None:
         name_idx, hits = detect_bundle_col(bnd)
@@ -572,7 +574,15 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
             tbl = tbl.join(mm, how="outer").fillna(0).astype(int)
             tbl.index.name = T["office_no"]
             tbl = tbl.reset_index()
-            result = result.merge(tbl, on=T["office_no"], how="left")
+            name_map5 = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
+            tbl.insert(0, T["office_name"], tbl[T["office_no"]].map(name_map5).fillna(T["unmatched"]))
+            wanted = BUNDLE_ORDER + [T["mm_ru"], T["mm_ur"]]
+            ordered_b = [c for c in wanted if c in tbl.columns]
+            tbl = tbl[[T["office_name"], T["office_no"]] + ordered_b]
+            if len(ordered_b) > 0:
+                tot_b = tbl[ordered_b].sum(axis=1)
+                tbl = tbl.assign(_t=tot_b).sort_values("_t", ascending=False).drop(columns="_t")
+            bundle_df = tbl.reset_index(drop=True)
 
             name_map4 = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
             mm_rows = bm[bad]
@@ -583,14 +593,6 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
                 T["dist_type"]: mm_rows[T["item"]],
                 T["bundle_lbl"]: mm_rows["label"],
             }).sort_values(T["office_no"])
-
-            text_cols4 = [T["inc"], T["wal"]]
-            skip4 = [T["office_no"], T["office_name"]] + text_cols4
-            for c in result.columns:
-                if c in skip4:
-                    continue
-                if c in tbl.columns:
-                    result[c] = result[c].fillna(0).astype(int)
 
             if hits == 0:
                 bnd_warn = T["bnd_noname"]
@@ -614,7 +616,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
         T["last_ru"], T["last_net"],
         T["pts_ru"], T["pts_net"], T["pts_last_ru"], T["pts_last_net"],
         T["inc"], T["wal"],
-    ] + BUNDLE_ORDER + [T["mm_ru"], T["mm_ur"]]
+    ]
     ordered = []
     for base in order_base:
         for c in result.columns:
@@ -642,6 +644,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
     if bnd_warn is not None:
         st.warning(bnd_warn)
     result.attrs["mismatch"] = mismatch_df
+    result.attrs["bundles"] = bundle_df
     return result
 
 
@@ -653,7 +656,7 @@ GRAY_HEADER = "A6A6A6"
 YELLOW = "FFFF00"
 
 
-def format_excel(df, extra=None):
+def format_excel(df, extras=None):
     # writes df (and optional extra sheet) to xlsx bytes: gray cells, yellow first column,
     # borders, centered text, equal column widths, font size 14
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -688,9 +691,10 @@ def format_excel(df, extra=None):
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Sheet1")
         style_sheet(writer.sheets["Sheet1"])
-        if extra is not None and len(extra) > 0:
-            extra.to_excel(writer, index=False, sheet_name=T["mm_sheet"])
-            style_sheet(writer.sheets[T["mm_sheet"]])
+        if extras is not None:
+            for sheet_name, sheet_df in extras:
+                sheet_df.to_excel(writer, index=False, sheet_name=sheet_name)
+                style_sheet(writer.sheets[sheet_name])
     return buf.getvalue()
 
 
@@ -826,11 +830,21 @@ if agents_file is not None and dist_file is not None:
                 result = compute(agents, dist, q, inc, wal, bnd)
                 if result is not None:
                     show_table(result)
+                    bundle_df = result.attrs.get("bundles")
                     mm_df = result.attrs.get("mismatch")
+                    extras = []
+                    if bundle_df is not None:
+                        st.write(T["bnd"])
+                        if len(bundle_df) > 0:
+                            show_table(bundle_df)
+                        else:
+                            st.info(T["bnd_empty"])
+                        extras.append((T["bnd"], bundle_df))
                     if mm_df is not None and len(mm_df) > 0:
                         st.write(T["mm_title"])
                         show_table(mm_df)
-                    xlsx_bytes = format_excel(result, mm_df)
+                        extras.append((T["mm_sheet"], mm_df))
+                    xlsx_bytes = format_excel(result, extras)
                     st.download_button(
                         T["download"],
                         data=xlsx_bytes,
