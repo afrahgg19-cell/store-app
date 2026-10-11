@@ -44,6 +44,11 @@ T = {
     "pts_net": "\u0646\u0642\u0627\u0637 \u0643\u0644\u064a\u0629 \u0646\u062a",
     "pts_last_ru": "\u0646\u0642\u0627\u0637 \u0622\u062e\u0631 \u064a\u0648\u0645 (\u0631\u064a\u062f + \u064a\u0648\u0632)",
     "pts_last_net": "\u0646\u0642\u0627\u0637 \u0622\u062e\u0631 \u064a\u0648\u0645 (\u0646\u062a)",
+    "up_inc": "\u0627\u0631\u0641\u0639 \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u062d\u0627\u0641\u0632",
+    "inc": "\u0627\u0644\u062d\u0627\u0641\u0632",
+    "inc_info": "\u0627\u0644\u062d\u0627\u0641\u0632: \u0639\u062f\u062f \u0627\u0644\u0635\u0641\u0648\u0641",
+    "inc_after": "\u0628\u0639\u062f \u0625\u0632\u0627\u0644\u0629 \u0627\u0644\u0635\u0641\u0631",
+    "inc_offices": "\u0645\u0643\u0627\u062a\u0628 \u0628\u0627\u0644\u062d\u0627\u0641\u0632",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -74,6 +79,8 @@ Q_TYPE_COL = 1
 Q_OFFICE_COL = 2
 DATE_COL = 3
 Q_POINTS_COL = 17   # R = points
+INC_OFFICE_COL = 0  # incentive: A = office number
+INC_VALUE_COL = 7   # incentive: H = value (zeros removed)
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -153,7 +160,7 @@ def pick_sheet(sheets, label):
     return sheets[chosen]
 
 
-def compute(agents, dist, q):
+def compute(agents, dist, q, inc=None):
     agents_df = pd.DataFrame({
         "key": agents.iloc[:, 1].apply(last10),
         T["office_name"]: agents.iloc[:, 0],
@@ -283,6 +290,45 @@ def compute(agents, dist, q):
             + " | " + T["q_last"] + ": " + last_txt
         )
 
+    inc_msg = None
+    if inc is not None:
+        inc_df = pd.DataFrame({
+            "key": inc.iloc[:, INC_OFFICE_COL].apply(last10),
+            "val": pd.to_numeric(
+                inc.iloc[:, INC_VALUE_COL].astype(str).str.replace(",", "", regex=False),
+                errors="coerce",
+            ),
+        })
+        inc_total = len(inc_df)
+        inc_df = inc_df.dropna(subset=["key", "val"])
+        inc_df = inc_df[inc_df["val"] != 0]
+        inc_after = len(inc_df)
+        inc_keys = inc_df["key"].drop_duplicates()
+        inc_tbl = pd.DataFrame({T["office_no"]: inc_keys, T["inc"]: "done"})
+
+        result = result.merge(inc_tbl, on=T["office_no"], how="outer")
+
+        name_map2 = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
+        result[T["office_name"]] = result[T["office_name"]].fillna(
+            result[T["office_no"]].map(name_map2)
+        ).fillna(T["unmatched"])
+        result[T["inc"]] = result[T["inc"]].fillna("")
+
+        skip_cols = (T["office_no"], T["office_name"], T["inc"])
+        num_cols2 = [c for c in result.columns if c not in skip_cols]
+        for c in num_cols2:
+            result[c] = result[c].fillna(0)
+            if c.startswith(T["pts_word"]):
+                result[c] = result[c].round(2)
+            else:
+                result[c] = result[c].astype(int)
+
+        inc_msg = (
+            T["inc_info"] + ": " + str(inc_total)
+            + " | " + T["inc_after"] + ": " + str(inc_after)
+            + " | " + T["inc_offices"] + ": " + str(len(inc_keys))
+        )
+
     st.success(T["done"] + ": " + str(len(result)) + " | " + T["unm_rows"] + ": " + str(unmatched))
     st.info(
         T["orig"] + ": " + str(total_rows)
@@ -292,23 +338,28 @@ def compute(agents, dist, q):
     )
     if q_msg is not None:
         st.info(q_msg)
+    if inc_msg is not None:
+        st.info(inc_msg)
     return result
 
 
 st.title(T["title"])
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 with c1:
     agents_file = st.file_uploader(T["up_agents"], key="agents")
 with c2:
     dist_file = st.file_uploader(T["up_dist"], key="dist")
 with c3:
     quality_file = st.file_uploader(T["up_quality"], key="quality")
+with c4:
+    inc_file = st.file_uploader(T["up_inc"], key="inc")
 
 if agents_file is not None and dist_file is not None:
     agents = None
     dist = None
     q = None
+    inc = None
 
     with c1:
         sh = load_report(agents_file, T["agents"])
@@ -323,6 +374,11 @@ if agents_file is not None and dist_file is not None:
             sh = load_report(quality_file, T["quality"])
             if sh is not None:
                 q = pick_sheet(sh, T["quality"])
+    if inc_file is not None:
+        with c4:
+            sh = load_report(inc_file, T["inc"])
+            if sh is not None:
+                inc = pick_sheet(sh, T["inc"])
 
     if agents is not None and dist is not None:
         with st.expander(T["preview"]):
@@ -333,10 +389,13 @@ if agents_file is not None and dist_file is not None:
             if q is not None:
                 st.write(T["quality"])
                 st.dataframe(q.head(5))
+            if inc is not None:
+                st.write(T["inc"])
+                st.dataframe(inc.head(5))
 
         if st.button(T["calc"]):
             try:
-                result = compute(agents, dist, q)
+                result = compute(agents, dist, q, inc)
                 if result is not None:
                     st.dataframe(result, use_container_width=True)
                     buf = BytesIO()
