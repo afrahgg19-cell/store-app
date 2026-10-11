@@ -1,4 +1,5 @@
 import re
+import textwrap
 import traceback
 import pandas as pd
 import streamlit as st
@@ -72,6 +73,7 @@ T = {
     "mm_sheet": "\u0628\u0627\u0642\u0627\u062a \u0645\u062e\u0627\u0644\u0641\u0629",
     "bnd_empty": "\u0645\u0627 \u0644\u0642\u064a\u062a \u0628\u0627\u0642\u0627\u062a \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u062e\u0637\u0648\u0637 \u0645\u0648\u0632\u0639\u0629",
     "bnd_nomatch": "\u063a\u064a\u0631 \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0648\u0643\u0644\u0627\u0621",
+    "remain": "\u0628\u0627\u0642\u064a",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -160,29 +162,29 @@ BUNDLE_SPLIT = {
 }
 
 BUNDLE_ORDER = [
-    "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 3 \u0623\u0634\u0647\u0631",
-    "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 5",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 10",
+    "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0631\u064a\u062f 12000 \u0623\u0633\u0628\u0648\u0639\u064a\u0629",
+    "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 3 \u0623\u0634\u0647\u0631",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 25",
+    "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
+    "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0631\u064a\u062f 40 \u0623\u0633\u0628\u0648\u0639\u064a\u0629",
+    "\u0628\u0627\u0642\u0629 \u0628\u0631\u064a\u0645\u064a\u0648\u0645 \u0631\u064a\u062f",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0627\u0645 5",
+    "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0623\u0633\u0628\u0648\u0639\u064a\u0629 12000",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 15000",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 25",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 30",
-    "\u0628\u0627\u0642\u0629 \u0623\u0633\u0628\u0648\u0639\u064a\u0629 12000 \u0628\u0644\u0627 \u062d\u062f\u0648\u062f",
-    "\u0628\u0627\u0642\u0629 \u0646\u062a \u0623\u0633\u0628\u0648\u0639\u064a\u0629 12000",
-    "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0631\u064a\u062f 12000 \u0623\u0633\u0628\u0648\u0639\u064a\u0629",
-    "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0623\u0633\u0628\u0648\u0639\u064a\u0629 12000",
-    "\u0628\u0627\u0642\u0629 \u0623\u0631\u0628\u0639\u064a\u0646",
-    "\u0628\u0627\u0642\u0629 \u0646\u062a \u0623\u0633\u0628\u0648\u0639\u064a\u0629 40",
-    "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0631\u064a\u062f 40 \u0623\u0633\u0628\u0648\u0639\u064a\u0629",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0623\u0633\u0628\u0648\u0639\u064a\u0629 40",
+    "\u0628\u0627\u0642\u0629 \u0646\u062a \u0623\u0633\u0628\u0648\u0639\u064a\u0629 12000",
+    "\u0628\u0627\u0642\u0629 \u0646\u062a \u0623\u0633\u0628\u0648\u0639\u064a\u0629 40",
     "\u0628\u0627\u0642\u0629 \u0646\u062a \u0634\u0647\u0631\u064a 40",
     "\u0628\u0627\u0642\u0629 \u0625\u0646\u062a\u0631\u0646\u062a \u0634\u0647\u0631\u064a\u0629 \u0628\u0644\u0627 \u062d\u062f\u0648\u062f",
-    "\u0628\u0627\u0642\u0629 \u0628\u0631\u064a\u0645\u064a\u0648\u0645",
-    "\u0628\u0627\u0642\u0629 \u0628\u0631\u064a\u0645\u064a\u0648\u0645 \u0631\u064a\u062f",
     "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0646\u062a \u0623\u0628\u0648 40 \u0628\u062a\u0639\u0628\u0626\u0629 50",
     "\u0628\u0627\u0642\u0629 \u0631\u0627\u0648\u062a\u0631 110",
+    "\u0628\u0627\u0642\u0629 \u0623\u0633\u0628\u0648\u0639\u064a\u0629 12000 \u0628\u0644\u0627 \u062d\u062f\u0648\u062f",
+    "\u0628\u0627\u0642\u0629 \u0623\u0631\u0628\u0639\u064a\u0646",
+    "\u0628\u0627\u0642\u0629 \u0628\u0631\u064a\u0645\u064a\u0648\u0645",
 ]
 
 BUNDLE_FAMILY = {}
@@ -601,6 +603,12 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
     rest = [c for c in result.columns if c not in ordered]
     result = result[ordered + rest]
 
+    ren = {}
+    for c in [RED, USE, DAILY, MONTHLY, BIG_ROUTER, SMALL_MIFI, USE_1M]:
+        if c in result.columns:
+            ren[c] = T["remain"] + " " + c
+    result = result.rename(columns=ren)
+
     st.success(T["done"] + ": " + str(len(result)) + " | " + T["unm_rows"] + ": " + str(unmatched))
     st.info(
         T["orig"] + ": " + str(total_rows)
@@ -625,6 +633,8 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
 
 # ===== formatting settings (change here) =====
 FONT_SIZE = 14
+HEADER_LINE_CHARS = 19   # approx. characters per line in a header cell
+HEADER_LINE_PT = 19      # height of one text line (points)
 COL_WIDTH = 24
 GRAY_BODY = "D9D9D9"
 GRAY_HEADER = "A6A6A6"
@@ -659,7 +669,12 @@ def format_excel(df, extras=None):
                     cell.fill = gray_body
         for i in range(1, ws.max_column + 1):
             ws.column_dimensions[get_column_letter(i)].width = COL_WIDTH
-        ws.row_dimensions[1].height = 70
+        max_lines = 1
+        for cell in ws[1]:
+            if cell.value is not None:
+                n = len(textwrap.wrap(str(cell.value), HEADER_LINE_CHARS)) or 1
+                max_lines = max(max_lines, n)
+        ws.row_dimensions[1].height = max_lines * HEADER_LINE_PT + 6
         ws.freeze_panes = "B2"
 
     buf = BytesIO()
