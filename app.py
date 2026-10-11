@@ -49,6 +49,11 @@ T = {
     "inc_info": "\u0627\u0644\u062d\u0627\u0641\u0632: \u0639\u062f\u062f \u0627\u0644\u0635\u0641\u0648\u0641",
     "inc_after": "\u0628\u0639\u062f \u0625\u0632\u0627\u0644\u0629 \u0627\u0644\u0635\u0641\u0631",
     "inc_offices": "\u0645\u0643\u0627\u062a\u0628 \u0628\u0627\u0644\u062d\u0627\u0641\u0632",
+    "up_wal": "\u0627\u0631\u0641\u0639 \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0645\u062d\u0627\u0641\u0638",
+    "wal": "\u0627\u0644\u0645\u062d\u0627\u0641\u0638",
+    "wal_info": "\u0627\u0644\u0645\u062d\u0627\u0641\u0638: \u0639\u062f\u062f \u0627\u0644\u0635\u0641\u0648\u0641",
+    "wal_after": "\u0628\u0639\u062f \u0641\u0644\u062a\u0631 Y",
+    "wal_offices": "\u0645\u0643\u0627\u062a\u0628 \u0628\u0627\u0644\u0645\u062d\u0627\u0641\u0638",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -81,6 +86,8 @@ DATE_COL = 3
 Q_POINTS_COL = 17   # R = points
 INC_OFFICE_COL = 0  # incentive: A = office number
 INC_VALUE_COL = 7   # incentive: H = value (zeros removed)
+WAL_OFFICE_COL = 1  # wallets: B = office number
+WAL_FLAG_COL = 2    # wallets: C = flag (keep rows with Y)
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -160,7 +167,7 @@ def pick_sheet(sheets, label):
     return sheets[chosen]
 
 
-def compute(agents, dist, q, inc=None):
+def compute(agents, dist, q, inc=None, wal=None):
     agents_df = pd.DataFrame({
         "key": agents.iloc[:, 1].apply(last10),
         T["office_name"]: agents.iloc[:, 0],
@@ -329,6 +336,46 @@ def compute(agents, dist, q, inc=None):
             + " | " + T["inc_offices"] + ": " + str(len(inc_keys))
         )
 
+    wal_msg = None
+    if wal is not None:
+        wal_df = pd.DataFrame({
+            "key": wal.iloc[:, WAL_OFFICE_COL].apply(last10),
+            "flag": wal.iloc[:, WAL_FLAG_COL].astype(str).str.strip().str.lower(),
+        })
+        wal_total = len(wal_df)
+        wal_df = wal_df.dropna(subset=["key"])
+        wal_df = wal_df[wal_df["flag"] == "y"]
+        wal_after = len(wal_df)
+        wal_keys = wal_df["key"].drop_duplicates()
+        wal_tbl = pd.DataFrame({T["office_no"]: wal_keys, T["wal"]: "done"})
+
+        result = result.merge(wal_tbl, on=T["office_no"], how="outer")
+
+        name_map3 = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
+        result[T["office_name"]] = result[T["office_name"]].fillna(
+            result[T["office_no"]].map(name_map3)
+        ).fillna(T["unmatched"])
+
+        text_cols = [T["inc"], T["wal"]]
+        for c in text_cols:
+            if c in result.columns:
+                result[c] = result[c].fillna("")
+
+        skip_cols3 = [T["office_no"], T["office_name"]] + text_cols
+        num_cols3 = [c for c in result.columns if c not in skip_cols3]
+        for c in num_cols3:
+            result[c] = result[c].fillna(0)
+            if c.startswith(T["pts_word"]):
+                result[c] = result[c].round(2)
+            else:
+                result[c] = result[c].astype(int)
+
+        wal_msg = (
+            T["wal_info"] + ": " + str(wal_total)
+            + " | " + T["wal_after"] + ": " + str(wal_after)
+            + " | " + T["wal_offices"] + ": " + str(len(wal_keys))
+        )
+
     st.success(T["done"] + ": " + str(len(result)) + " | " + T["unm_rows"] + ": " + str(unmatched))
     st.info(
         T["orig"] + ": " + str(total_rows)
@@ -340,12 +387,14 @@ def compute(agents, dist, q, inc=None):
         st.info(q_msg)
     if inc_msg is not None:
         st.info(inc_msg)
+    if wal_msg is not None:
+        st.info(wal_msg)
     return result
 
 
 st.title(T["title"])
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 with c1:
     agents_file = st.file_uploader(T["up_agents"], key="agents")
 with c2:
@@ -354,12 +403,15 @@ with c3:
     quality_file = st.file_uploader(T["up_quality"], key="quality")
 with c4:
     inc_file = st.file_uploader(T["up_inc"], key="inc")
+with c5:
+    wal_file = st.file_uploader(T["up_wal"], key="wal")
 
 if agents_file is not None and dist_file is not None:
     agents = None
     dist = None
     q = None
     inc = None
+    wal = None
 
     with c1:
         sh = load_report(agents_file, T["agents"])
@@ -379,6 +431,11 @@ if agents_file is not None and dist_file is not None:
             sh = load_report(inc_file, T["inc"])
             if sh is not None:
                 inc = pick_sheet(sh, T["inc"])
+    if wal_file is not None:
+        with c5:
+            sh = load_report(wal_file, T["wal"])
+            if sh is not None:
+                wal = pick_sheet(sh, T["wal"])
 
     if agents is not None and dist is not None:
         with st.expander(T["preview"]):
@@ -392,10 +449,13 @@ if agents_file is not None and dist_file is not None:
             if inc is not None:
                 st.write(T["inc"])
                 st.dataframe(inc.head(5))
+            if wal is not None:
+                st.write(T["wal"])
+                st.dataframe(wal.head(5))
 
         if st.button(T["calc"]):
             try:
-                result = compute(agents, dist, q, inc)
+                result = compute(agents, dist, q, inc, wal)
                 if result is not None:
                     st.dataframe(result, use_container_width=True)
                     buf = BytesIO()
