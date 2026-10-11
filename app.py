@@ -71,6 +71,7 @@ T = {
     "bundle_lbl": "\u0627\u0644\u0628\u0627\u0642\u0629",
     "mm_sheet": "\u0628\u0627\u0642\u0627\u062a \u0645\u062e\u0627\u0644\u0641\u0629",
     "bnd_empty": "\u0645\u0627 \u0644\u0642\u064a\u062a \u0628\u0627\u0642\u0627\u062a \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u062e\u0637\u0648\u0637 \u0645\u0648\u0632\u0639\u0629",
+    "bnd_nomatch": "\u063a\u064a\u0631 \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0648\u0643\u0644\u0627\u0621",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -106,8 +107,8 @@ INC_VALUE_COL = 7   # incentive: H = value (zeros removed)
 WAL_OFFICE_COL = 1  # wallets: B = office number
 WAL_FLAG_COL = 2    # wallets: C = flag (keep rows with Y)
 
-# ===== Bundles report (A = line number, H = sub-type) =====
-BND_LINE_COL = 0
+# ===== Bundles report (A = office number, H = sub-type) =====
+BND_OFFICE_COL = 0   # bundles: A = office number (matched with agents B)
 BND_SUB_COL = 7
 
 BUNDLE_DIRECT = {
@@ -540,7 +541,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
             else:
                 sub_vals = ""
             b = pd.DataFrame({
-                "line10": bnd.iloc[:, BND_LINE_COL].apply(last10),
+                "key": bnd.iloc[:, BND_OFFICE_COL].apply(last10),
                 "name": bnd.iloc[:, name_idx].map(norm_name),
                 "sub": sub_vals,
             })
@@ -548,51 +549,26 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
             b["label"] = [classify_bundle(n, s2) for n, s2 in zip(b["name"], b["sub"])]
             unknown = b.loc[b["label"].isna() & (b["name"] != ""), "name"].value_counts().head(8)
             b_unknown = int(b["label"].isna().sum())
-            b = b.dropna(subset=["label", "line10"])
+            b = b.dropna(subset=["label", "key"])
 
-            dl = d[["line", "key", T["item"]]].copy()
-            dl["fam"] = dl[T["item"]].map(LINE_FAMILY)
-            dl["line10"] = dl["line"].apply(last10)
-            dl = dl.dropna(subset=["line10"]).drop_duplicates("line10")
+            agent_keys = set(agents_df["key"])
+            b_nomatch = int((~b["key"].isin(agent_keys)).sum())
 
-            bm = b.merge(dl, on="line10", how="inner")
-            b_nodist = len(b) - len(bm)
-            bm["bfam"] = bm["label"].map(BUNDLE_FAMILY)
-            bad_ru = (bm["fam"] == "red") & (bm["bfam"] == "use")
-            bad_ur = (bm["fam"] == "use") & (bm["bfam"] == "red")
-            bad = bad_ru | bad_ur
-
-            ok = bm[~bad]
-            if len(ok) > 0:
-                tbl = ok.groupby(["key", "label"]).size().unstack(fill_value=0)
+            if len(b) > 0:
+                tbl = b.groupby(["key", "label"]).size().unstack(fill_value=0)
             else:
                 tbl = pd.DataFrame()
-            mm = pd.DataFrame({
-                T["mm_ru"]: bm[bad_ru].groupby("key").size(),
-                T["mm_ur"]: bm[bad_ur].groupby("key").size(),
-            })
-            tbl = tbl.join(mm, how="outer").fillna(0).astype(int)
             tbl.index.name = T["office_no"]
+            tbl.columns.name = None
             tbl = tbl.reset_index()
             name_map5 = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
             tbl.insert(0, T["office_name"], tbl[T["office_no"]].map(name_map5).fillna(T["unmatched"]))
-            wanted = BUNDLE_ORDER + [T["mm_ru"], T["mm_ur"]]
-            ordered_b = [c for c in wanted if c in tbl.columns]
+            ordered_b = [c for c in BUNDLE_ORDER if c in tbl.columns]
             tbl = tbl[[T["office_name"], T["office_no"]] + ordered_b]
             if len(ordered_b) > 0:
                 tot_b = tbl[ordered_b].sum(axis=1)
                 tbl = tbl.assign(_t=tot_b).sort_values("_t", ascending=False).drop(columns="_t")
             bundle_df = tbl.reset_index(drop=True)
-
-            name_map4 = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
-            mm_rows = bm[bad]
-            mismatch_df = pd.DataFrame({
-                T["office_no"]: mm_rows["key"],
-                T["office_name"]: mm_rows["key"].map(name_map4).fillna(T["unmatched"]),
-                T["line_lbl"]: mm_rows["line"],
-                T["dist_type"]: mm_rows[T["item"]],
-                T["bundle_lbl"]: mm_rows["label"],
-            }).sort_values(T["office_no"])
 
             if hits == 0:
                 bnd_warn = T["bnd_noname"]
@@ -603,8 +579,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
             bnd_msg = (
                 T["bnd_info"] + ": " + str(b_total)
                 + " | " + T["bnd_unknown"] + ": " + str(b_unknown)
-                + " | " + T["bnd_nodist"] + ": " + str(b_nodist)
-                + " | " + T["bnd_mm"] + ": " + str(len(mm_rows))
+                + " | " + T["bnd_nomatch"] + ": " + str(b_nomatch)
                 + " | " + T["bnd_col"] + ": " + col_letter
             )
 
