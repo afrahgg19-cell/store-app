@@ -39,6 +39,11 @@ T = {
     "q_last": "\u0622\u062e\u0631 \u064a\u0648\u0645",
     "q_ignored": "\u0635\u0641\u0648\u0641 \u0645\u062a\u062c\u0627\u0647\u0644\u0629 (\u0646\u0648\u0639 \u063a\u064a\u0631 \u0645\u0639\u0631\u0648\u0641)",
     "q_baddate": "\u062a\u0648\u0627\u0631\u064a\u062e \u0643\u0648\u0627\u0644\u062a\u064a \u063a\u064a\u0631 \u0645\u0642\u0631\u0648\u0621\u0629",
+    "pts_word": "\u0646\u0642\u0627\u0637",
+    "pts_ru": "\u0646\u0642\u0627\u0637 \u0643\u0644\u064a\u0629 (\u0631\u064a\u062f + \u064a\u0648\u0632)",
+    "pts_net": "\u0646\u0642\u0627\u0637 \u0643\u0644\u064a\u0629 \u0646\u062a",
+    "pts_last_ru": "\u0646\u0642\u0627\u0637 \u0622\u062e\u0631 \u064a\u0648\u0645 (\u0631\u064a\u062f + \u064a\u0648\u0632)",
+    "pts_last_net": "\u0646\u0642\u0627\u0637 \u0622\u062e\u0631 \u064a\u0648\u0645 (\u0646\u062a)",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -68,6 +73,7 @@ QUALITY_TYPE = {"2": "net", "93": "red", "4": "red", "32": "use"}
 Q_TYPE_COL = 1
 Q_OFFICE_COL = 2
 DATE_COL = 3
+Q_POINTS_COL = 17   # R = points
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -196,6 +202,11 @@ def compute(agents, dist, q):
             "date": pd.to_datetime(q.iloc[:, DATE_COL], errors="coerce"),
         })
 
+        if q.shape[1] > Q_POINTS_COL:
+            pts_raw = q.iloc[:, Q_POINTS_COL].astype(str).str.replace(",", "", regex=False)
+            qd["pts"] = pd.to_numeric(pts_raw, errors="coerce")
+        else:
+            qd["pts"] = 0.0
         q_total = len(qd)
         q_ignored = int(qd["group"].isna().sum())
         q_baddate = int(qd["date"].isna().sum())
@@ -209,19 +220,32 @@ def compute(agents, dist, q):
         tot = tot[["red", "use", "net"]]
         tot.columns = [T["act_red"], T["act_use"], T["act_net"]]
 
+        ru_mask = qd["group"].isin(["red", "use"])
+        pts_ru = qd[ru_mask].groupby("key")["pts"].sum()
+        pts_net = qd[qd["group"] == "net"].groupby("key")["pts"].sum()
+        pts_tbl = pd.DataFrame({T["pts_ru"]: pts_ru, T["pts_net"]: pts_net})
+        tot = tot.join(pts_tbl, how="outer")
+
         qdd = qd.dropna(subset=["date"]).copy()
         if qdd.empty:
             last_day = None
-            last_tbl = pd.DataFrame(columns=[T["last_ru"], T["last_net"]])
+            last_tbl = pd.DataFrame(columns=[T["last_ru"], T["last_net"], T["pts_last_ru"], T["pts_last_net"]])
         else:
             qdd["day"] = qdd["date"].dt.normalize()
             last_day = qdd["day"].max()
             ld = qdd[qdd["day"] == last_day]
             ru = ld[ld["group"].isin(["red", "use"])].groupby("key").size()
             nt = ld[ld["group"] == "net"].groupby("key").size()
-            last_tbl = pd.DataFrame({T["last_ru"]: ru, T["last_net"]: nt})
+            pr = ld[ld["group"].isin(["red", "use"])].groupby("key")["pts"].sum()
+            pn = ld[ld["group"] == "net"].groupby("key")["pts"].sum()
+            last_tbl = pd.DataFrame({
+                T["last_ru"]: ru,
+                T["last_net"]: nt,
+                T["pts_last_ru"]: pr,
+                T["pts_last_net"]: pn,
+            })
 
-        q_all = tot.join(last_tbl, how="outer").fillna(0).astype(int)
+        q_all = tot.join(last_tbl, how="outer").fillna(0)
         q_all.index.name = T["office_no"]
         q_all = q_all.reset_index()
 
@@ -230,6 +254,8 @@ def compute(agents, dist, q):
             q_all = q_all.rename(columns={
                 T["last_ru"]: T["last_ru"] + " " + day_txt,
                 T["last_net"]: T["last_net"] + " " + day_txt,
+                T["pts_last_ru"]: T["pts_last_ru"] + " " + day_txt,
+                T["pts_last_net"]: T["pts_last_net"] + " " + day_txt,
             })
 
         result = result.merge(q_all, on=T["office_no"], how="outer")
@@ -240,7 +266,12 @@ def compute(agents, dist, q):
         ).fillna(T["unmatched"])
 
         num_cols = [c for c in result.columns if c not in (T["office_no"], T["office_name"])]
-        result[num_cols] = result[num_cols].fillna(0).astype(int)
+        for c in num_cols:
+            result[c] = result[c].fillna(0)
+            if c.startswith(T["pts_word"]):
+                result[c] = result[c].round(2)
+            else:
+                result[c] = result[c].astype(int)
 
         last_txt = "-"
         if last_day is not None:
