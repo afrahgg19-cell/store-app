@@ -77,6 +77,7 @@ T = {
     "remain": "\u0628\u0627\u0642\u064a",
     "brand": "\u0628\u0631\u064a\u0642 \u0627\u0644\u0627\u0646\u0648\u0627\u0631",
     "rep": "\u0627\u0633\u0645 \u0627\u0644\u0645\u0646\u062f\u0648\u0628",
+    "loading": "\u062c\u0627\u0631\u064a \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641 (\u0645\u0631\u0629 \u0648\u062d\u062f\u0629 \u0628\u0633)",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -276,11 +277,17 @@ def read_any(raw, kind):
     return {"sheet1": pd.read_csv(StringIO(text), sep=sep, dtype=str)}
 
 
+@st.cache_data(show_spinner=T["loading"], max_entries=16)
+def read_cached(raw, kind):
+    # each file is parsed once; reruns of the page reuse the saved result
+    return read_any(raw, kind)
+
+
 def load_report(file, label):
     raw = file.getvalue()
     kind = detect_kind(raw)
     try:
-        return read_any(raw, kind)
+        return read_cached(raw, kind)
     except Exception as e:
         st.error(T["read_fail"] + " (" + label + ", " + kind + "): " + str(e))
         return None
