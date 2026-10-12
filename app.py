@@ -76,6 +76,7 @@ T = {
     "bnd_nomatch": "\u063a\u064a\u0631 \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0648\u0643\u0644\u0627\u0621",
     "remain": "\u0628\u0627\u0642\u064a",
     "brand": "\u0628\u0631\u064a\u0642 \u0627\u0644\u0627\u0646\u0648\u0627\u0631",
+    "rep": "\u0627\u0633\u0645 \u0627\u0644\u0645\u0646\u062f\u0648\u0628",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -116,6 +117,7 @@ BND_OFFICE_COL = 0   # bundles: A = office number (matched with agents B)
 BND_SUB_COL = 7
 
 BUNDLE_DIRECT = {
+    "red 15,000 monthly package": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
     "red 15 4 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 3 \u0623\u0634\u0647\u0631",
     "red 30 4 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
     "monthly10gb": "\u0628\u0627\u0642\u0629 \u0625\u0646\u062a\u0631\u0646\u062a \u0634\u0647\u0631\u064a\u0629 \u0628\u0644\u0627 \u062d\u062f\u0648\u062f",
@@ -167,6 +169,7 @@ BUNDLE_ORDER = [
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 5",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 10",
     "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0631\u064a\u062f 12000 \u0623\u0633\u0628\u0648\u0639\u064a\u0629",
+    "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 3 \u0623\u0634\u0647\u0631",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 25",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
@@ -320,9 +323,14 @@ def pick_sheet(sheets, label):
 
 
 def compute(agents, dist, q, inc=None, wal=None, bnd=None):
+    if agents.shape[1] > 2:
+        rep_vals = agents.iloc[:, 2]
+    else:
+        rep_vals = ""
     agents_df = pd.DataFrame({
         "key": agents.iloc[:, 1].apply(last10),
         T["office_name"]: agents.iloc[:, 0],
+        T["rep"]: rep_vals,
     })
     agents_df = agents_df.dropna(subset=["key"]).drop_duplicates("key")
 
@@ -587,8 +595,10 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
                 + " | " + T["bnd_col"] + ": " + col_letter
             )
 
+    rep_map = dict(zip(agents_df["key"], agents_df[T["rep"]]))
+    result[T["rep"]] = result[T["office_no"]].map(rep_map).fillna("")
     order_base = [
-        T["office_name"], T["office_no"],
+        T["office_name"], T["office_no"], T["rep"],
         RED, USE, DAILY, MONTHLY, BIG_ROUTER, SMALL_MIFI,
         T["total"],
         T["act_red"], T["act_use"], T["act_net"],
