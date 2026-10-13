@@ -1,5 +1,8 @@
 import re
 import textwrap
+import calendar
+import json
+import os
 from datetime import datetime, timedelta, timezone
 import traceback
 import pandas as pd
@@ -78,6 +81,24 @@ T = {
     "brand": "\u0628\u0631\u064a\u0642 \u0627\u0644\u0627\u0646\u0648\u0627\u0631",
     "rep": "\u0627\u0633\u0645 \u0627\u0644\u0645\u0646\u062f\u0648\u0628",
     "loading": "\u062c\u0627\u0631\u064a \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641 (\u0645\u0631\u0629 \u0648\u062d\u062f\u0629 \u0628\u0633)",
+    "pts_sheet": "\u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0643\u0644\u064a\u0629",
+    "pts_title": "\u062c\u062f\u0648\u0644 \u0645\u062a\u0627\u0628\u0639\u0629 \u0627\u0644\u0646\u0642\u0627\u0637 \u0648\u0627\u0644\u062e\u0637\u0648\u0637 - \u0634\u0647\u0631",
+    "col_date": "\u0627\u0644\u062a\u0627\u0631\u064a\u062e",
+    "h_net_pts": "\u062e\u0637 \u0646\u062a \u0646\u0642\u0627\u0637",
+    "h_red_pts": "\u062e\u0637 \u0631\u064a\u062f \u0646\u0642\u0627\u0637",
+    "h_use_pts": "\u062e\u0637 \u064a\u0648\u0632 \u0646\u0642\u0627\u0637",
+    "h_net_cnt": "\u0639\u062f\u062f \u062e\u0637 \u0646\u062a",
+    "h_red_cnt": "\u0639\u062f\u062f \u062e\u0637 \u0631\u064a\u062f",
+    "h_use_cnt": "\u0639\u062f\u062f \u062e\u0637 \u064a\u0648\u0632",
+    "f_daily": "\u0645\u062c\u0645\u0648\u0639 \u0627\u0644\u064a\u0648\u0645\u064a",
+    "f_total": "\u0627\u0644\u0645\u062c\u0645\u0648\u0639 \u0627\u0644\u0643\u0644\u064a",
+    "f_target": "\u0627\u0644\u062a\u0627\u0631\u0643\u062a",
+    "f_ratio": "\u0627\u0644\u0646\u0633\u0628\u0629",
+    "tgt_title": "\u0627\u0644\u062a\u0627\u0631\u0643\u062a \u0627\u0644\u0634\u0647\u0631\u064a (\u0646\u0642\u0627\u0637)",
+    "tgt_net": "\u062a\u0627\u0631\u0643\u062a \u0646\u062a",
+    "tgt_red": "\u062a\u0627\u0631\u0643\u062a \u0631\u064a\u062f",
+    "tgt_use": "\u062a\u0627\u0631\u0643\u062a \u064a\u0648\u0632",
+    "tgt_nosave": "\u0645\u0627 \u0643\u062f\u0631\u062a \u0623\u062d\u0641\u0638 \u0627\u0644\u062a\u0627\u0631\u0643\u062a \u0639\u0644\u0649 \u0627\u0644\u0633\u064a\u0631\u0641\u0631\u060c \u064a\u0628\u0642\u0649 \u0644\u0644\u062c\u0644\u0633\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629 \u0628\u0633",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -216,6 +237,21 @@ for _lbl in [
     BUNDLE_FAMILY[_lbl] = "use"
 
 LINE_FAMILY = {RED: "red", USE: "use", USE_1M: "use"}
+
+MONTHS = [
+    "\u0643\u0627\u0646\u0648\u0646 \u0627\u0644\u062b\u0627\u0646\u064a",
+    "\u0634\u0628\u0627\u0637",
+    "\u0622\u0630\u0627\u0631",
+    "\u0646\u064a\u0633\u0627\u0646",
+    "\u0623\u064a\u0627\u0631",
+    "\u062d\u0632\u064a\u0631\u0627\u0646",
+    "\u062a\u0645\u0648\u0632",
+    "\u0622\u0628",
+    "\u0623\u064a\u0644\u0648\u0644",
+    "\u062a\u0634\u0631\u064a\u0646 \u0627\u0644\u0623\u0648\u0644",
+    "\u062a\u0634\u0631\u064a\u0646 \u0627\u0644\u062b\u0627\u0646\u064a",
+    "\u0643\u0627\u0646\u0648\u0646 \u0627\u0644\u0623\u0648\u0644",
+]
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -379,6 +415,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
     result = result.rename(columns={"key": T["office_no"]})
 
     q_msg = None
+    points_src = None
     if q is not None:
         qd = pd.DataFrame({
             "group": q.iloc[:, Q_TYPE_COL].apply(clean_code).map(QUALITY_TYPE),
@@ -395,6 +432,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
         q_ignored = int(qd["group"].isna().sum())
         q_baddate = int(qd["date"].isna().sum())
 
+        points_src = qd.dropna(subset=["group"])[["group", "date", "pts"]].copy()
         qd = qd.dropna(subset=["group", "key"]).copy()
 
         tot = pd.crosstab(qd["key"], qd["group"])
@@ -647,6 +685,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
         st.warning(bnd_warn)
     result.attrs["mismatch"] = mismatch_df
     result.attrs["bundles"] = bundle_df
+    result.attrs["points_src"] = points_src
     return result
 
 
@@ -660,7 +699,173 @@ GRAY_HEADER = "A6A6A6"
 YELLOW = "FFFF00"
 
 
-def format_excel(df, extras=None):
+def fmt_num(v):
+    if v is None:
+        return ""
+    if isinstance(v, float) and v == int(v):
+        v = int(v)
+    if isinstance(v, int):
+        return "{:,}".format(v)
+    return "{:,.2f}".format(v)
+
+
+def build_points_table(src, tgt_net, tgt_red, tgt_use):
+    # daily table of points and counts per type (net / red / use) for the month
+    s2 = src.copy()
+    s2["pts"] = s2["pts"].fillna(0)
+    dated = s2.dropna(subset=["date"]).copy()
+    if dated.empty:
+        return None
+    dated["day"] = dated["date"].dt.normalize()
+    last_day = dated["day"].max()
+    year = last_day.year
+    month = last_day.month
+    ndays = calendar.monthrange(year, month)[1]
+    month_name = MONTHS[month - 1]
+    in_month = dated[(dated["day"].dt.year == year) & (dated["day"].dt.month == month)]
+    groups = ["net", "red", "use"]
+
+    rows = []
+    for day in range(1, ndays + 1):
+        label = month_name + " " + str(day).zfill(2)
+        if day > last_day.day:
+            rows.append([label, None, None, None, None, None, None])
+            continue
+        sub = in_month[in_month["day"].dt.day == day]
+        vals = []
+        for g in groups:
+            vals.append(float(sub.loc[sub["group"] == g, "pts"].sum()))
+        for g in groups:
+            vals.append(int((sub["group"] == g).sum()))
+        rows.append([label] + vals)
+
+    daily_sum = []
+    for i in range(1, 7):
+        daily_sum.append(sum(r[i] for r in rows if r[i] is not None))
+
+    grand = []
+    for g in groups:
+        grand.append(float(s2.loc[s2["group"] == g, "pts"].sum()))
+    for g in groups:
+        grand.append(int((s2["group"] == g).sum()))
+
+    target = [tgt_net, tgt_red, tgt_use]
+    ratio = []
+    for i in range(3):
+        if target[i]:
+            ratio.append(grand[i] / target[i])
+        else:
+            ratio.append(None)
+
+    heads = [T["col_date"], T["h_net_pts"], T["h_red_pts"], T["h_use_pts"],
+             T["h_net_cnt"], T["h_red_cnt"], T["h_use_cnt"]]
+    disp = []
+    for r in rows:
+        disp.append([r[0]] + [fmt_num(v) for v in r[1:]])
+    disp.append([T["f_daily"]] + [fmt_num(v) for v in daily_sum])
+    disp.append([T["f_total"]] + [fmt_num(v) for v in grand])
+    disp.append([T["f_target"]] + [fmt_num(v) for v in target] + ["", "", ""])
+    pct = []
+    for v in ratio:
+        if v is None:
+            pct.append("")
+        else:
+            pct.append("{:.2f}%".format(v * 100))
+    disp.append([T["f_ratio"]] + pct + ["", "", ""])
+    display_df = pd.DataFrame(disp, columns=heads)
+
+    return {
+        "title": T["pts_title"] + " " + month_name,
+        "heads": heads,
+        "rows": rows,
+        "daily_sum": daily_sum,
+        "grand": grand,
+        "target": target,
+        "ratio": ratio,
+        "display": display_df,
+    }
+
+
+def write_points_sheet(ws, info):
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    blue = "1F4E79"
+    ws.sheet_view.rightToLeft = True
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    light = Side(style="thin", color="BFBFBF")
+    box = Border(left=light, right=light, top=light, bottom=light)
+    head_fill = PatternFill("solid", start_color=blue, end_color=blue)
+    band_fill = PatternFill("solid", start_color="EEF3FA", end_color="EEF3FA")
+    white_fill = PatternFill("solid", start_color="FFFFFF", end_color="FFFFFF")
+    foot_fill = PatternFill("solid", start_color="DCE6F1", end_color="DCE6F1")
+    ncols = 7
+
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
+    t = ws.cell(row=1, column=1, value=info["title"])
+    t.font = Font(size=FONT_SIZE + 4, bold=True, color=blue)
+    t.alignment = center
+    ws.row_dimensions[1].height = 34
+
+    hr = 3
+    for j, h in enumerate(info["heads"], start=1):
+        c = ws.cell(row=hr, column=j, value=h)
+        c.font = Font(size=FONT_SIZE, bold=True, color="FFFFFF")
+        c.fill = head_fill
+        c.alignment = center
+        c.border = box
+    ws.row_dimensions[hr].height = 30
+
+    r = hr + 1
+    first_data = r
+    for k, row in enumerate(info["rows"]):
+        fill = band_fill if k % 2 == 0 else white_fill
+        for j, v in enumerate(row, start=1):
+            if isinstance(v, float) and v == int(v):
+                v = int(v)
+            c = ws.cell(row=r, column=j, value=v)
+            c.font = Font(size=FONT_SIZE)
+            c.fill = fill
+            c.alignment = center
+            c.border = box
+            if j > 1:
+                c.number_format = "#,##0"
+        r += 1
+    last_data = r - 1
+
+    def footer(label, values, number_format, last=False):
+        nonlocal r
+        cells = [label] + list(values)
+        while len(cells) < ncols:
+            cells.append(None)
+        for j, v in enumerate(cells, start=1):
+            if isinstance(v, float) and number_format == "#,##0" and v == int(v):
+                v = int(v)
+            c = ws.cell(row=r, column=j, value=v)
+            c.font = Font(size=FONT_SIZE, bold=True)
+            c.fill = foot_fill
+            c.alignment = center
+            if last:
+                dbl = Side(style="double", color=blue)
+                c.border = Border(left=light, right=light, top=light, bottom=dbl)
+            else:
+                c.border = box
+            if j > 1:
+                c.number_format = number_format
+        r += 1
+
+    footer(T["f_daily"], info["daily_sum"], "#,##0")
+    footer(T["f_total"], info["grand"], "#,##0")
+    footer(T["f_target"], info["target"], "#,##0")
+    footer(T["f_ratio"], info["ratio"], "0.00%", last=True)
+
+    for i in range(1, ncols + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 20
+    ws.auto_filter.ref = "A" + str(hr) + ":" + get_column_letter(ncols) + str(last_data)
+    ws.freeze_panes = "A" + str(hr + 1)
+
+
+def format_excel(df, extras=None, points=None):
     # writes df (and optional extra sheet) to xlsx bytes: gray cells, yellow first column,
     # borders, centered text, equal column widths, font size 14
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -704,6 +909,9 @@ def format_excel(df, extras=None):
             for sheet_name, sheet_df in extras:
                 sheet_df.to_excel(writer, index=False, sheet_name=sheet_name)
                 style_sheet(writer.sheets[sheet_name])
+        if points is not None:
+            ws_points = writer.book.create_sheet(T["pts_sheet"])
+            write_points_sheet(ws_points, points)
     return buf.getvalue()
 
 
@@ -719,6 +927,43 @@ def style_screen(df):
     })
     sty = sty.set_properties(subset=[first], **{"background-color": "#FFFF00"})
     return sty
+
+
+try:
+    TARGETS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "targets.json")
+except NameError:
+    TARGETS_FILE = "targets.json"
+
+
+def target_month_key(now=None):
+    # month of the report date (= yesterday, Iraq time).
+    # the target starts again from 0 when this month changes
+    if now is None:
+        now = datetime.now(timezone(timedelta(hours=3)))
+    day = now - timedelta(days=1)
+    return str(day.year) + "-" + str(day.month).zfill(2)
+
+
+def load_targets():
+    try:
+        with open(TARGETS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_targets(month_key, net, red, use):
+    data = load_targets()
+    data[month_key] = {"net": int(net), "red": int(red), "use": int(use)}
+    keys = sorted(data.keys())
+    for k in keys[:-12]:
+        del data[k]
+    try:
+        with open(TARGETS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        return True
+    except Exception:
+        return False
 
 
 def report_file_name(now=None):
@@ -843,7 +1088,17 @@ if agents_file is not None and dist_file is not None:
                 st.write(T["bnd"])
                 st.dataframe(bnd.head(5))
 
+        mk = target_month_key()
+        saved_t = load_targets().get(mk, {})
+        with st.expander(T["tgt_title"] + " - " + mk):
+            tgt_net = st.number_input(T["tgt_net"], min_value=0, value=int(saved_t.get("net", 0)), step=100, key="tgt_net_" + mk)
+            tgt_red = st.number_input(T["tgt_red"], min_value=0, value=int(saved_t.get("red", 0)), step=100, key="tgt_red_" + mk)
+            tgt_use = st.number_input(T["tgt_use"], min_value=0, value=int(saved_t.get("use", 0)), step=100, key="tgt_use_" + mk)
+
         if st.button(T["calc"]):
+            save_ok = save_targets(mk, tgt_net, tgt_red, tgt_use)
+            if not save_ok:
+                st.caption(T["tgt_nosave"])
             try:
                 result = compute(agents, dist, q, inc, wal, bnd)
                 if result is not None:
@@ -862,7 +1117,14 @@ if agents_file is not None and dist_file is not None:
                         st.write(T["mm_title"])
                         show_table(mm_df)
                         extras.append((T["mm_sheet"], mm_df))
-                    xlsx_bytes = format_excel(result, extras)
+                    points_info = None
+                    points_src = result.attrs.get("points_src")
+                    if points_src is not None:
+                        points_info = build_points_table(points_src, tgt_net, tgt_red, tgt_use)
+                    if points_info is not None:
+                        st.write(T["pts_sheet"])
+                        st.dataframe(points_info["display"], use_container_width=True)
+                    xlsx_bytes = format_excel(result, extras, points_info)
                     st.download_button(
                         T["download"],
                         data=xlsx_bytes,
