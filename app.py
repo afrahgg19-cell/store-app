@@ -102,6 +102,7 @@ T = {
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
+    "monthly_sheet": "\u0634\u064a\u062a \u0627\u0644\u062a\u0648\u0632\u064a\u0639 \u0627\u0644\u0634\u0647\u0631\u064a",
 }
 
 RED = "\u0631\u064a\u062f"
@@ -111,6 +112,7 @@ DAILY = "\u0646\u062a \u064a\u0648\u0645\u064a"
 BIG_ROUTER = "\u0631\u0627\u0648\u062a\u0631 \u0643\u0628\u064a\u0631"
 SMALL_MIFI = "\u0631\u0627\u0648\u062a\u0631 \u0635\u063a\u064a\u0631"
 USE_1M = "\u062e\u0637 \u064a\u0648\u0632 \u0645\u0644\u064a\u0648\u0646\u064a"
+BLANK_LBL = "\u0628\u0644\u0627\u0646\u0643"
 
 item_map = {
     "pre-paid sim card - type2": RED,
@@ -122,6 +124,10 @@ item_map = {
     "gprs sim card with mifi huawei cat4": SMALL_MIFI,
     "nms-1 million coin silver": USE_1M,
 }
+
+# ===== monthly distribution sheet settings =====
+M_ITEMS = [RED, USE, USE_1M, DAILY, MONTHLY, BIG_ROUTER, SMALL_MIFI]
+M_STATUSES = ["distributed", "active"]
 
 QUALITY_TYPE = {"2": "net", "93": "red", "4": "red", "32": "use"}
 
@@ -385,6 +391,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
         "date": pd.to_datetime(dist.iloc[:, 8], errors="coerce"),
     })
 
+    d_raw = d.copy()  # raw rows, used by the monthly sheet (its own de-duplication)
     total_rows = len(d)
     bad_dates = int(d["date"].isna().sum())
 
@@ -620,8 +627,10 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
             tbl = tbl.reset_index()
             name_map5 = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
             tbl.insert(0, T["office_name"], tbl[T["office_no"]].map(name_map5).fillna(T["unmatched"]))
+            rep_map5 = dict(zip(agents_df["key"], agents_df[T["rep"]]))
+            tbl.insert(2, T["rep"], tbl[T["office_no"]].map(rep_map5).fillna(""))
             ordered_b = [c for c in BUNDLE_ORDER if c in tbl.columns]
-            tbl = tbl[[T["office_name"], T["office_no"]] + ordered_b]
+            tbl = tbl[[T["office_name"], T["office_no"], T["rep"]] + ordered_b]
             if len(ordered_b) > 0:
                 tot_b = tbl[ordered_b].sum(axis=1)
                 tbl = tbl.assign(_t=tot_b).sort_values("_t", ascending=False).drop(columns="_t")
@@ -639,6 +648,42 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
                 + " | " + T["bnd_nomatch"] + ": " + str(b_nomatch)
                 + " | " + T["bnd_col"] + ": " + col_letter
             )
+
+    # ===== monthly distribution sheet =====
+    # month = month of the latest date in the distribution file.
+    # inside that month: same line (column A) repeated -> keep only the latest date,
+    # then keep statuses distributed + active, ALL item types (unknown ones keep their own name)
+    monthly_df = None
+    monthly_month = None
+    dd = d_raw.dropna(subset=["date"])
+    if not dd.empty:
+        last_d = dd["date"].max()
+        monthly_month = int(last_d.month)
+        in_m = dd[(dd["date"].dt.year == last_d.year) & (dd["date"].dt.month == last_d.month)].copy()
+        in_m["lkey"] = in_m["line"].map(lambda s_: last10(s_) or s_)
+        in_m = in_m.sort_values("date", kind="stable")
+        in_m = in_m.drop_duplicates(subset="lkey", keep="last")
+        in_m = in_m[in_m["status"].isin(M_STATUSES)].copy()
+        raw_item = in_m["item"].replace({"": BLANK_LBL, "nan": BLANK_LBL, "none": BLANK_LBL})
+        in_m[T["item"]] = in_m["item"].map(item_map).fillna(raw_item)
+        in_m = in_m.dropna(subset=["key"])
+        if not in_m.empty:
+            mt = pd.crosstab(in_m["key"], in_m[T["item"]])
+            for col in M_ITEMS:
+                if col not in mt.columns:
+                    mt[col] = 0
+            extra_items = [c for c in mt.columns if c not in M_ITEMS]
+            mt = mt[M_ITEMS + extra_items]
+            mt.columns.name = None
+            mt[T["total"]] = mt.sum(axis=1)
+            mt = mt.sort_values(T["total"], ascending=False)
+            mt.index.name = T["office_no"]
+            mt = mt.reset_index()
+            m_names = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
+            m_reps = dict(zip(agents_df["key"], agents_df[T["rep"]]))
+            mt.insert(0, T["office_name"], mt[T["office_no"]].map(m_names).fillna(T["unmatched"]))
+            mt.insert(2, T["rep"], mt[T["office_no"]].map(m_reps).fillna(""))
+            monthly_df = mt
 
     rep_map = dict(zip(agents_df["key"], agents_df[T["rep"]]))
     result[T["rep"]] = result[T["office_no"]].map(rep_map).fillna("")
@@ -686,6 +731,8 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
     result.attrs["mismatch"] = mismatch_df
     result.attrs["bundles"] = bundle_df
     result.attrs["points_src"] = points_src
+    result.attrs["monthly"] = monthly_df
+    result.attrs["monthly_month"] = monthly_month
     return result
 
 
@@ -1121,6 +1168,12 @@ if agents_file is not None and dist_file is not None:
                         st.write(T["mm_title"])
                         show_table(mm_df)
                         extras.append((T["mm_sheet"], mm_df))
+                    monthly_df = result.attrs.get("monthly")
+                    if monthly_df is not None:
+                        m_name = T["monthly_sheet"] + " " + str(result.attrs.get("monthly_month"))
+                        st.write(m_name)
+                        show_table(monthly_df)
+                        extras.append((m_name, monthly_df))
                     points_info = None
                     points_src = result.attrs.get("points_src")
                     if points_src is not None:
