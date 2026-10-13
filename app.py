@@ -655,6 +655,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
     # then keep statuses distributed + active, ALL item types (unknown ones keep their own name)
     monthly_df = None
     monthly_month = None
+    monthly_msg = None
     dd = d_raw.dropna(subset=["date"])
     if not dd.empty:
         last_d = dd["date"].max()
@@ -663,7 +664,16 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
         in_m["lkey"] = in_m["line"].map(lambda s_: last10(s_) or s_)
         in_m = in_m.sort_values("date", kind="stable")
         in_m = in_m.drop_duplicates(subset="lkey", keep="last")
+        m_rows_month = len(in_m)
         in_m = in_m[in_m["status"].isin(M_STATUSES)].copy()
+        m_rows_status = len(in_m)
+        m_no_key = int(in_m["key"].isna().sum())
+        monthly_msg = (
+            "monthly: rows(no dup)=" + str(m_rows_month)
+            + " | after status=" + str(m_rows_status)
+            + " | no office number=" + str(m_no_key)
+            + " | bad dates=" + str(bad_dates)
+        )
         raw_item = in_m["item"].replace({"": BLANK_LBL, "nan": BLANK_LBL, "none": BLANK_LBL})
         in_m[T["item"]] = in_m["item"].map(item_map).fillna(raw_item)
         in_m = in_m.dropna(subset=["key"])
@@ -733,6 +743,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
     result.attrs["points_src"] = points_src
     result.attrs["monthly"] = monthly_df
     result.attrs["monthly_month"] = monthly_month
+    result.attrs["monthly_msg"] = monthly_msg
     return result
 
 
@@ -912,7 +923,7 @@ def write_points_sheet(ws, info):
     ws.freeze_panes = "A" + str(hr + 1)
 
 
-def format_excel(df, extras=None, points=None):
+def format_excel(df, extras=None, points=None, after_points=None):
     # writes df (and optional extra sheet) to xlsx bytes: gray cells, yellow first column,
     # borders, centered text, equal column widths, font size 14
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -959,6 +970,10 @@ def format_excel(df, extras=None, points=None):
         if points is not None:
             ws_points = writer.book.create_sheet(T["pts_sheet"])
             write_points_sheet(ws_points, points)
+        if after_points is not None:
+            for sheet_name, sheet_df in after_points:
+                sheet_df.to_excel(writer, index=False, sheet_name=sheet_name)
+                style_sheet(writer.sheets[sheet_name])
     return buf.getvalue()
 
 
@@ -1157,6 +1172,7 @@ if agents_file is not None and dist_file is not None:
                     bundle_df = result.attrs.get("bundles")
                     mm_df = result.attrs.get("mismatch")
                     extras = []
+                    after_points = []
                     if bundle_df is not None:
                         st.write(T["bnd"])
                         if len(bundle_df) > 0:
@@ -1173,7 +1189,9 @@ if agents_file is not None and dist_file is not None:
                         m_name = T["monthly_sheet"] + " " + str(result.attrs.get("monthly_month"))
                         st.write(m_name)
                         show_table(monthly_df)
-                        extras.append((m_name, monthly_df))
+                        after_points = [(m_name, monthly_df)]
+                        if result.attrs.get("monthly_msg"):
+                            st.info(result.attrs.get("monthly_msg"))
                     points_info = None
                     points_src = result.attrs.get("points_src")
                     if points_src is not None:
@@ -1181,7 +1199,7 @@ if agents_file is not None and dist_file is not None:
                     if points_info is not None:
                         st.write(T["pts_sheet"])
                         st.dataframe(points_info["display"], use_container_width=True)
-                    xlsx_bytes = format_excel(result, extras, points_info)
+                    xlsx_bytes = format_excel(result, extras, points_info, after_points)
                     st.download_button(
                         T["download"],
                         data=xlsx_bytes,
