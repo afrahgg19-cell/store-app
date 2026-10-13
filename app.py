@@ -127,7 +127,7 @@ item_map = {
 
 # ===== monthly distribution sheet settings =====
 M_ITEMS = [RED, USE, USE_1M, DAILY, MONTHLY, BIG_ROUTER, SMALL_MIFI]
-M_STATUSES = ["distributed", "active"]
+M_STATUSES = ["distributed", "activated", "active"]
 
 QUALITY_TYPE = {"2": "net", "93": "red", "4": "red", "32": "use"}
 
@@ -692,7 +692,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
             m_names = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
             m_reps = dict(zip(agents_df["key"], agents_df[T["rep"]]))
             mt.insert(0, T["office_name"], mt[T["office_no"]].map(m_names).fillna(T["unmatched"]))
-            mt.insert(2, T["rep"], mt[T["office_no"]].map(m_reps).fillna(""))
+            mt.insert(2, T["rep"], mt[T["office_no"]].map(m_reps).fillna("").astype(str))
             monthly_df = mt
 
     rep_map = dict(zip(agents_df["key"], agents_df[T["rep"]]))
