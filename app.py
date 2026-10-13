@@ -1032,6 +1032,17 @@ with c5:
 with c6:
     bnd_file = st.file_uploader(T["up_bnd"], key="bnd")
 
+mk = target_month_key()
+saved_t = load_targets().get(mk, {})
+with st.expander(T["tgt_title"] + " - " + mk, expanded=True):
+    t1, t2, t3 = st.columns(3)
+    with t1:
+        tgt_net = st.number_input(T["tgt_net"], min_value=0, value=int(saved_t.get("net", 0)), step=100, key="tgt_net_" + mk)
+    with t2:
+        tgt_red = st.number_input(T["tgt_red"], min_value=0, value=int(saved_t.get("red", 0)), step=100, key="tgt_red_" + mk)
+    with t3:
+        tgt_use = st.number_input(T["tgt_use"], min_value=0, value=int(saved_t.get("use", 0)), step=100, key="tgt_use_" + mk)
+
 if agents_file is not None and dist_file is not None:
     agents = None
     dist = None
@@ -1087,13 +1098,6 @@ if agents_file is not None and dist_file is not None:
             if bnd is not None:
                 st.write(T["bnd"])
                 st.dataframe(bnd.head(5))
-
-        mk = target_month_key()
-        saved_t = load_targets().get(mk, {})
-        with st.expander(T["tgt_title"] + " - " + mk):
-            tgt_net = st.number_input(T["tgt_net"], min_value=0, value=int(saved_t.get("net", 0)), step=100, key="tgt_net_" + mk)
-            tgt_red = st.number_input(T["tgt_red"], min_value=0, value=int(saved_t.get("red", 0)), step=100, key="tgt_red_" + mk)
-            tgt_use = st.number_input(T["tgt_use"], min_value=0, value=int(saved_t.get("use", 0)), step=100, key="tgt_use_" + mk)
 
         if st.button(T["calc"]):
             save_ok = save_targets(mk, tgt_net, tgt_red, tgt_use)
