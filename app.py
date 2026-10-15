@@ -99,6 +99,8 @@ T = {
     "tgt_red": "\u062a\u0627\u0631\u0643\u062a \u0631\u064a\u062f",
     "tgt_use": "\u062a\u0627\u0631\u0643\u062a \u064a\u0648\u0632",
     "tgt_nosave": "\u0645\u0627 \u0643\u062f\u0631\u062a \u0623\u062d\u0641\u0638 \u0627\u0644\u062a\u0627\u0631\u0643\u062a \u0639\u0644\u0649 \u0627\u0644\u0633\u064a\u0631\u0641\u0631\u060c \u064a\u0628\u0642\u0649 \u0644\u0644\u062c\u0644\u0633\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629 \u0628\u0633",
+    "key_detect": "\u062a\u0645 \u0627\u0643\u062a\u0634\u0627\u0641 \u0623\u0639\u0645\u062f\u0629 \u0631\u0642\u0645 \u0627\u0644\u0645\u0643\u062a\u0628 \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b \u0644\u0623\u0646 B \u0648 F \u0645\u0627 \u062a\u0637\u0627\u0628\u0642\u0648\u0627",
+    "key_none": "\u0645\u0627 \u0641\u064a \u0623\u064a \u0631\u0642\u0645 \u0645\u0643\u062a\u0628 \u0645\u0634\u062a\u0631\u0643 \u0628\u064a\u0646 \u0627\u0644\u0648\u0643\u0644\u0627\u0621 \u0648\u0627\u0644\u062a\u0648\u0632\u064a\u0639",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -265,10 +267,59 @@ XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 def last10(num):
     if pd.isna(num):
         return None
-    s = re.sub(r"\D", "", str(num))
+    s = str(num).strip()
+    if re.fullmatch(r"\d+\.0+", s):
+        s = s.split(".")[0]
+    elif re.fullmatch(r"\d+(\.\d+)?[eE]\+?\d+", s):
+        try:
+            s = str(int(float(s)))
+        except Exception:
+            pass
+    s = re.sub(r"\D", "", s)
     if s:
         return s[-10:]
     return None
+
+
+def letter_of(i):
+    if i < 26:
+        return chr(65 + i)
+    return str(i)
+
+
+def text_columns(df, key_idx):
+    # columns (among the first 8) that mostly hold names (contain letters), without the key column
+    found = []
+    for i in range(min(df.shape[1], 8)):
+        if i == key_idx:
+            continue
+        vals = df.iloc[:, i].dropna().astype(str).head(50)
+        if len(vals) == 0:
+            continue
+        with_letters = vals.str.contains(r"[A-Za-z\u0600-\u06FF]", regex=True).sum()
+        if with_letters >= 0.6 * len(vals):
+            found.append(i)
+    return found
+
+
+def find_key_columns(agents, dist):
+    # fallback when B (agents) and F (distribution) share no numbers:
+    # find the two columns that share the most office numbers
+    a_sets = {}
+    for i in range(min(agents.shape[1], 10)):
+        a_sets[i] = set(agents.iloc[:, i].apply(last10).dropna())
+    d_sets = {}
+    for j in range(min(dist.shape[1], 12)):
+        d_sets[j] = set(dist.iloc[:, j].apply(last10).dropna())
+    best = (0, 1, 5)
+    for i, a_set in a_sets.items():
+        if len(a_set) == 0:
+            continue
+        for j, d_set in d_sets.items():
+            n = len(a_set & d_set)
+            if n > best[0]:
+                best = (n, i, j)
+    return best
 
 
 def clean_code(val):
@@ -372,13 +423,47 @@ def pick_sheet(sheets, label):
 
 
 def compute(agents, dist, q, inc=None, wal=None, bnd=None):
-    if agents.shape[1] > 2:
-        rep_vals = agents.iloc[:, 2]
+    a_idx = 1   # agents: B = office number
+    d_idx = 5   # distribution: F = office number
+    a_keys = agents.iloc[:, a_idx].apply(last10)
+    d_keys = dist.iloc[:, d_idx].apply(last10)
+    if len(set(a_keys.dropna()) & set(d_keys.dropna())) == 0:
+        n_best, bi, bj = find_key_columns(agents, dist)
+        if n_best > 0:
+            a_idx = bi
+            d_idx = bj
+            a_keys = agents.iloc[:, a_idx].apply(last10)
+            st.warning(
+                T["key_detect"] + ": " + T["agents"] + " = " + letter_of(a_idx)
+                + " | " + T["dist"] + " = " + letter_of(d_idx)
+            )
+        else:
+            st.warning(
+                T["key_none"]
+                + " | " + T["agents"] + " (B): " + str(agents.iloc[:3, 1].tolist()) + " -> " + str(a_keys.head(3).tolist())
+                + " | " + T["dist"] + " (F): " + str(dist.iloc[:3, 5].tolist()) + " -> " + str(d_keys.head(3).tolist())
+            )
+
+    if a_idx == 1:
+        name_idx = 0
+        rep_idx = 2
+    else:
+        txt = text_columns(agents, a_idx)
+        if len(txt) > 0:
+            name_idx = txt[0]
+        else:
+            name_idx = 0 if a_idx != 0 else 1
+        if len(txt) > 1:
+            rep_idx = txt[1]
+        else:
+            rep_idx = None
+    if rep_idx is not None and agents.shape[1] > rep_idx:
+        rep_vals = agents.iloc[:, rep_idx]
     else:
         rep_vals = ""
     agents_df = pd.DataFrame({
-        "key": agents.iloc[:, 1].apply(last10),
-        T["office_name"]: agents.iloc[:, 0],
+        "key": a_keys,
+        T["office_name"]: agents.iloc[:, name_idx],
         T["rep"]: rep_vals,
     })
     agents_df = agents_df.dropna(subset=["key"]).drop_duplicates("key")
@@ -387,7 +472,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
         "line": dist.iloc[:, 0].astype(str).str.strip(),
         "item": dist.iloc[:, 2].astype(str).str.strip().str.lower(),
         "status": dist.iloc[:, 4].astype(str).str.strip().str.lower(),
-        "key": dist.iloc[:, 5].apply(last10),
+        "key": dist.iloc[:, d_idx].apply(last10),
         "date": pd.to_datetime(dist.iloc[:, 8], errors="coerce"),
     })
 
@@ -749,6 +834,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
 
 # ===== formatting settings (change here) =====
 FONT_SIZE = 14
+POINTS_SHEET_RTL = False   # False = points sheet starts from the left side (True = from the right)
 HEADER_LINE_CHARS = 19   # approx. characters per line in a header cell
 HEADER_LINE_PT = 19      # height of one text line (points)
 COL_WIDTH = 24
@@ -849,7 +935,7 @@ def write_points_sheet(ws, info):
     from openpyxl.utils import get_column_letter
 
     blue = "1F4E79"
-    ws.sheet_view.rightToLeft = True
+    ws.sheet_view.rightToLeft = POINTS_SHEET_RTL
     center = Alignment(horizontal="center", vertical="center", wrap_text=True)
     light = Side(style="thin", color="BFBFBF")
     box = Border(left=light, right=light, top=light, bottom=light)
