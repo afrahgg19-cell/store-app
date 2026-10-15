@@ -101,6 +101,9 @@ T = {
     "tgt_nosave": "\u0645\u0627 \u0643\u062f\u0631\u062a \u0623\u062d\u0641\u0638 \u0627\u0644\u062a\u0627\u0631\u0643\u062a \u0639\u0644\u0649 \u0627\u0644\u0633\u064a\u0631\u0641\u0631\u060c \u064a\u0628\u0642\u0649 \u0644\u0644\u062c\u0644\u0633\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629 \u0628\u0633",
     "key_detect": "\u062a\u0645 \u0627\u0643\u062a\u0634\u0627\u0641 \u0623\u0639\u0645\u062f\u0629 \u0631\u0642\u0645 \u0627\u0644\u0645\u0643\u062a\u0628 \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b \u0644\u0623\u0646 B \u0648 F \u0645\u0627 \u062a\u0637\u0627\u0628\u0642\u0648\u0627",
     "key_none": "\u0645\u0627 \u0641\u064a \u0623\u064a \u0631\u0642\u0645 \u0645\u0643\u062a\u0628 \u0645\u0634\u062a\u0631\u0643 \u0628\u064a\u0646 \u0627\u0644\u0648\u0643\u0644\u0627\u0621 \u0648\u0627\u0644\u062a\u0648\u0632\u064a\u0639",
+    "source": "\u0627\u0644\u0645\u0635\u062f\u0631",
+    "um_title": "\u0645\u0643\u0627\u062a\u0628 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f\u0629 \u0628\u0645\u0644\u0641 \u0627\u0644\u0648\u0643\u0644\u0627\u0621 (\u0628\u0634\u064a\u062a \u0645\u0646\u0641\u0635\u0644)",
+    "um_msg": "\u0645\u0643\u0627\u062a\u0628 \u063a\u064a\u0631 \u0645\u0637\u0627\u0628\u0642\u0629 \u0627\u0646\u0646\u0642\u0644\u062a \u0644\u0634\u064a\u062a \u0645\u0646\u0641\u0635\u0644",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -476,6 +479,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
         "date": pd.to_datetime(dist.iloc[:, 8], errors="coerce"),
     })
 
+    src_sets = {}
     d_raw = d.copy()  # raw rows, used by the monthly sheet (its own de-duplication)
     total_rows = len(d)
     bad_dates = int(d["date"].isna().sum())
@@ -494,6 +498,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
 
     merged = d.merge(agents_df, on="key", how="left")
     unmatched = int(merged[T["office_name"]].isna().sum())
+    src_sets[T["dist"]] = set(merged["key"].dropna())
 
     result = pd.crosstab(
         [merged["key"], merged[T["office_name"]].fillna(T["unmatched"])],
@@ -526,6 +531,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
 
         points_src = qd.dropna(subset=["group"])[["group", "date", "pts"]].copy()
         qd = qd.dropna(subset=["group", "key"]).copy()
+        src_sets[T["quality"]] = set(qd["key"])
 
         tot = pd.crosstab(qd["key"], qd["group"])
         for g in ["red", "use", "net"]:
@@ -611,6 +617,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
         inc_df = inc_df[inc_df["val"] != 0]
         inc_after = len(inc_df)
         inc_keys = inc_df["key"].drop_duplicates()
+        src_sets[T["inc"]] = set(inc_keys)
         inc_tbl = pd.DataFrame({T["office_no"]: inc_keys, T["inc"]: "done"})
 
         result = result.merge(inc_tbl, on=T["office_no"], how="outer")
@@ -647,6 +654,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
         wal_df = wal_df[wal_df["flag"] == "y"]
         wal_after = len(wal_df)
         wal_keys = wal_df["key"].drop_duplicates()
+        src_sets[T["wal"]] = set(wal_keys)
         wal_tbl = pd.DataFrame({T["office_no"]: wal_keys, T["wal"]: "done"})
 
         result = result.merge(wal_tbl, on=T["office_no"], how="outer")
@@ -699,6 +707,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
             unknown = b.loc[b["label"].isna() & (b["name"] != ""), "name"].value_counts().head(8)
             b_unknown = int(b["label"].isna().sum())
             b = b.dropna(subset=["label", "key"])
+            src_sets[T["bnd"]] = set(b["key"])
 
             agent_keys = set(agents_df["key"])
             b_nomatch = int((~b["key"].isin(agent_keys)).sum())
@@ -806,7 +815,23 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
             ren[c] = T["remain"] + " " + c
     result = result.rename(columns=ren)
 
+    unmatched_df = None
+    agent_key_set = set(agents_df["key"])
+    um_mask = ~result[T["office_no"]].isin(agent_key_set)
+    um_count = int(um_mask.sum())
+    if SPLIT_UNMATCHED and um_count > 0:
+        unmatched_df = result[um_mask].copy()
+        sources = []
+        for k in unmatched_df[T["office_no"]]:
+            names_ = [nm for nm, st_ in src_sets.items() if k in st_]
+            sources.append(" + ".join(names_))
+        unmatched_df.insert(2, T["source"], sources)
+        unmatched_df = unmatched_df.reset_index(drop=True)
+        result = result[~um_mask].reset_index(drop=True)
+
     st.success(T["done"] + ": " + str(len(result)) + " | " + T["unm_rows"] + ": " + str(unmatched))
+    if unmatched_df is not None:
+        st.info(T["um_msg"] + ": " + str(len(unmatched_df)))
     st.info(
         T["orig"] + ": " + str(total_rows)
         + " | " + T["dedup"] + ": " + str(after_dedup)
@@ -827,6 +852,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
     result.attrs["bundles"] = bundle_df
     result.attrs["points_src"] = points_src
     result.attrs["monthly"] = monthly_df
+    result.attrs["unmatched"] = unmatched_df
     result.attrs["monthly_month"] = monthly_month
     result.attrs["monthly_msg"] = monthly_msg
     return result
@@ -834,6 +860,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
 
 # ===== formatting settings (change here) =====
 FONT_SIZE = 14
+SPLIT_UNMATCHED = True   # True = offices not found in the agents file go to their own sheet
 POINTS_SHEET_RTL = False   # False = points sheet starts from the left side (True = from the right)
 HEADER_LINE_CHARS = 19   # approx. characters per line in a header cell
 HEADER_LINE_PT = 19      # height of one text line (points)
@@ -1278,6 +1305,11 @@ if agents_file is not None and dist_file is not None:
                         after_points = [(m_name, monthly_df)]
                         if result.attrs.get("monthly_msg"):
                             st.info(result.attrs.get("monthly_msg"))
+                    um_df = result.attrs.get("unmatched")
+                    if um_df is not None and len(um_df) > 0:
+                        st.write(T["um_title"])
+                        show_table(um_df)
+                        after_points.append((T["unmatched"], um_df))
                     points_info = None
                     points_src = result.attrs.get("points_src")
                     if points_src is not None:
