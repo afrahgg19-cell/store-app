@@ -104,6 +104,13 @@ T = {
     "source": "\u0627\u0644\u0645\u0635\u062f\u0631",
     "um_title": "\u0645\u0643\u0627\u062a\u0628 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f\u0629 \u0628\u0645\u0644\u0641 \u0627\u0644\u0648\u0643\u0644\u0627\u0621 (\u0628\u0634\u064a\u062a \u0645\u0646\u0641\u0635\u0644)",
     "um_msg": "\u0645\u0643\u0627\u062a\u0628 \u063a\u064a\u0631 \u0645\u0637\u0627\u0628\u0642\u0629 \u0627\u0646\u0646\u0642\u0644\u062a \u0644\u0634\u064a\u062a \u0645\u0646\u0641\u0635\u0644",
+    "um_warn": "\u0623\u0631\u0642\u0627\u0645 \u0645\u0643\u0627\u062a\u0628 \u0628\u0627\u0644\u062a\u0648\u0632\u064a\u0639 (\u0639\u0645\u0648\u062f F) \u0645\u0627 \u0644\u0642\u064a\u062a\u0647\u0627 \u0628\u0639\u0645\u0648\u062f B \u0628\u0627\u0644\u0648\u0643\u0644\u0627\u0621\u060c \u0645\u0627 \u0637\u0644\u0639\u062a \u0628\u0627\u0644\u062c\u062f\u0648\u0644",
+    "up_live": "\u0627\u0631\u0641\u0639 \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0627\u064a\u0641 \u0633\u062a\u0648\u0643",
+    "live": "\u0627\u0644\u0627\u064a\u0641 \u0633\u062a\u0648\u0643",
+    "live_info": "\u0627\u0644\u0627\u064a\u0641 \u0633\u062a\u0648\u0643: \u0639\u062f\u062f \u0627\u0644\u0623\u0631\u0642\u0627\u0645",
+    "live_main": "\u0627\u0646\u0634\u0627\u0644\u062a \u0645\u0646 \u0627\u0644\u0628\u0627\u0642\u064a (\u0627\u0644\u0634\u064a\u062a \u0627\u0644\u0623\u0648\u0644)",
+    "live_month": "\u0627\u0646\u0634\u0627\u0644\u062a \u0645\u0646 \u0627\u0644\u0634\u064a\u062a \u0627\u0644\u0634\u0647\u0631\u064a",
+    "live_none": "\u0645\u0627 \u0644\u0642\u064a\u062a \u0623\u064a \u0631\u0642\u0645 \u0645\u0634\u062a\u0631\u0643 \u0628\u064a\u0646 \u0627\u0644\u062a\u0648\u0632\u064a\u0639 \u0648\u0627\u0644\u0627\u064a\u0641 \u0633\u062a\u0648\u0643",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -425,7 +432,7 @@ def pick_sheet(sheets, label):
     return sheets[chosen]
 
 
-def compute(agents, dist, q, inc=None, wal=None, bnd=None):
+def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
     a_idx = 1   # agents: B = office number
     d_idx = 5   # distribution: F = office number
     a_keys = agents.iloc[:, a_idx].apply(last10)
@@ -491,6 +498,16 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
     d = d[d["status"] == "distributed"].copy()
     d[T["item"]] = d["item"].map(item_map)
     d = d.dropna(subset=[T["item"]])
+
+    live_set = set()
+    live_removed_main = 0
+    live_removed_m = 0
+    if live is not None:
+        live_set = set(live.iloc[:, 0].apply(last10).dropna())
+        d["lkey"] = d["line"].apply(last10)
+        in_live = d["lkey"].isin(live_set)
+        live_removed_main = int(in_live.sum())
+        d = d[~in_live].copy()
 
     if d.empty:
         st.error(T["empty"])
@@ -578,7 +595,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
                 T["pts_last_net"]: T["pts_last_net"] + " " + day_txt,
             })
 
-        result = result.merge(q_all, on=T["office_no"], how="outer")
+        result = result.merge(q_all, on=T["office_no"], how="left")
 
         name_map = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
         result[T["office_name"]] = result[T["office_name"]].fillna(
@@ -620,7 +637,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
         src_sets[T["inc"]] = set(inc_keys)
         inc_tbl = pd.DataFrame({T["office_no"]: inc_keys, T["inc"]: "done"})
 
-        result = result.merge(inc_tbl, on=T["office_no"], how="outer")
+        result = result.merge(inc_tbl, on=T["office_no"], how="left")
 
         name_map2 = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
         result[T["office_name"]] = result[T["office_name"]].fillna(
@@ -657,7 +674,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
         src_sets[T["wal"]] = set(wal_keys)
         wal_tbl = pd.DataFrame({T["office_no"]: wal_keys, T["wal"]: "done"})
 
-        result = result.merge(wal_tbl, on=T["office_no"], how="outer")
+        result = result.merge(wal_tbl, on=T["office_no"], how="left")
 
         name_map3 = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
         result[T["office_name"]] = result[T["office_name"]].fillna(
@@ -761,6 +778,10 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
         m_rows_month = len(in_m)
         in_m = in_m[in_m["status"].isin(M_STATUSES)].copy()
         m_rows_status = len(in_m)
+        if live is not None:
+            in_live_m = in_m["lkey"].isin(live_set)
+            live_removed_m = int(in_live_m.sum())
+            in_m = in_m[~in_live_m].copy()
         m_no_key = int(in_m["key"].isna().sum())
         monthly_msg = (
             "monthly: rows(no dup)=" + str(m_rows_month)
@@ -819,25 +840,32 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
     agent_key_set = set(agents_df["key"])
     um_mask = ~result[T["office_no"]].isin(agent_key_set)
     um_count = int(um_mask.sum())
-    if SPLIT_UNMATCHED and um_count > 0:
-        unmatched_df = result[um_mask].copy()
-        sources = []
-        for k in unmatched_df[T["office_no"]]:
-            names_ = [nm for nm, st_ in src_sets.items() if k in st_]
-            sources.append(" + ".join(names_))
-        unmatched_df.insert(2, T["source"], sources)
-        unmatched_df = unmatched_df.reset_index(drop=True)
+    if um_count > 0:
+        # numbers from the distribution file that are not in agents column B:
+        # not shown in the table, only reported here so nothing is lost silently
+        um_keys = [str(k) for k in result.loc[um_mask, T["office_no"]].tolist()]
+        st.warning(T["um_warn"] + ": " + str(um_count) + " | " + " , ".join(um_keys[:15]))
         result = result[~um_mask].reset_index(drop=True)
 
     st.success(T["done"] + ": " + str(len(result)) + " | " + T["unm_rows"] + ": " + str(unmatched))
-    if unmatched_df is not None:
-        st.info(T["um_msg"] + ": " + str(len(unmatched_df)))
     st.info(
         T["orig"] + ": " + str(total_rows)
         + " | " + T["dedup"] + ": " + str(after_dedup)
         + " | " + T["real"] + ": " + str(len(d))
         + " | " + T["bad_dates"] + ": " + str(bad_dates)
     )
+    if live is not None:
+        st.info(
+            T["live_info"] + ": " + str(len(live_set))
+            + " | " + T["live_main"] + ": " + str(live_removed_main)
+            + " | " + T["live_month"] + ": " + str(live_removed_m)
+        )
+        if live_removed_main == 0 and live_removed_m == 0:
+            st.warning(
+                T["live_none"]
+                + " | " + T["live"] + " (A): " + str(live.iloc[:3, 0].tolist())
+                + " | " + T["dist"] + " (A): " + str(dist.iloc[:3, 0].tolist())
+            )
     if q_msg is not None:
         st.info(q_msg)
     if inc_msg is not None:
@@ -860,7 +888,6 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None):
 
 # ===== formatting settings (change here) =====
 FONT_SIZE = 14
-SPLIT_UNMATCHED = True   # True = offices not found in the agents file go to their own sheet
 POINTS_SHEET_RTL = False   # False = points sheet starts from the left side (True = from the right)
 HEADER_LINE_CHARS = 19   # approx. characters per line in a header cell
 HEADER_LINE_PT = 19      # height of one text line (points)
@@ -1194,6 +1221,7 @@ st.title(T["title"])
 
 c1, c2, c3 = st.columns(3)
 c4, c5, c6 = st.columns(3)
+c7, c8, c9 = st.columns(3)
 with c1:
     agents_file = st.file_uploader(T["up_agents"], key="agents")
 with c2:
@@ -1206,6 +1234,8 @@ with c5:
     wal_file = st.file_uploader(T["up_wal"], key="wal")
 with c6:
     bnd_file = st.file_uploader(T["up_bnd"], key="bnd")
+with c7:
+    live_file = st.file_uploader(T["up_live"], key="live")
 
 mk = target_month_key()
 saved_t = load_targets().get(mk, {})
@@ -1225,6 +1255,7 @@ if agents_file is not None and dist_file is not None:
     inc = None
     wal = None
     bnd = None
+    live = None
 
     with c1:
         sh = load_report(agents_file, T["agents"])
@@ -1254,6 +1285,11 @@ if agents_file is not None and dist_file is not None:
             sh = load_report(bnd_file, T["bnd"])
             if sh is not None:
                 bnd = pick_sheet(sh, T["bnd"])
+    if live_file is not None:
+        with c7:
+            sh = load_report(live_file, T["live"])
+            if sh is not None:
+                live = pick_sheet(sh, T["live"])
 
     if agents is not None and dist is not None:
         with st.expander(T["preview"]):
@@ -1273,13 +1309,16 @@ if agents_file is not None and dist_file is not None:
             if bnd is not None:
                 st.write(T["bnd"])
                 st.dataframe(bnd.head(5))
+            if live is not None:
+                st.write(T["live"])
+                st.dataframe(live.head(5))
 
         if st.button(T["calc"]):
             save_ok = save_targets(mk, tgt_net, tgt_red, tgt_use)
             if not save_ok:
                 st.caption(T["tgt_nosave"])
             try:
-                result = compute(agents, dist, q, inc, wal, bnd)
+                result = compute(agents, dist, q, inc, wal, bnd, live)
                 if result is not None:
                     show_table(result)
                     bundle_df = result.attrs.get("bundles")
