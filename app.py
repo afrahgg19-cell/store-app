@@ -114,6 +114,7 @@ T = {
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
+    "q_required": "تقرير الكوالتي إجباري، ارفعه حتى يشتغل الحساب (باقي التقارير اختيارية)",
     "monthly_sheet": "\u0634\u064a\u062a \u0627\u0644\u062a\u0648\u0632\u064a\u0639 \u0627\u0644\u0634\u0647\u0631\u064a",
 }
 
@@ -159,8 +160,14 @@ BND_SUB_COL = 7
 
 BUNDLE_DIRECT = {
     "red 15,000 monthly package": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
-    "red 15 4 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 3 \u0623\u0634\u0647\u0631",
+    "red 15 4 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
+    "red 15 for 12 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
     "red 30 4 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
+    "red 30 for 12 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
+    "yooz 30 mix": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
+    "yooz 30 extra voice": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
+    "red 25 for 12 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 25",
+    "unlimited daily 4g": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0645\u064a\u0629",
     "monthly10gb": "\u0628\u0627\u0642\u0629 \u0625\u0646\u062a\u0631\u0646\u062a \u0634\u0647\u0631\u064a\u0629 \u0628\u0644\u0627 \u062d\u062f\u0648\u062f",
     "yooz 15-extra voice for 12 weeks": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 15000",
     "yooz 15 extra voice": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 15000",
@@ -196,7 +203,7 @@ BUNDLE_SPLIT = {
         ],
     },
     "unlimited premium package fup": {
-        "base": "\u0628\u0627\u0642\u0629 \u0628\u0631\u064a\u0645\u064a\u0648\u0645",
+        "base": None,   # premium with unknown sub-type: dropped
         "sub": [
             ("usim-gprs-rtr2", "\u0628\u0627\u0642\u0629 \u0631\u0627\u0648\u062a\u0631 110"),
             ("usim-40kv", "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0646\u062a \u0623\u0628\u0648 40 \u0628\u062a\u0639\u0628\u0626\u0629 50"),
@@ -211,7 +218,6 @@ BUNDLE_ORDER = [
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 10",
     "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0631\u064a\u062f 12000 \u0623\u0633\u0628\u0648\u0639\u064a\u0629",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
-    "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 3 \u0623\u0634\u0647\u0631",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 25",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
     "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0631\u064a\u062f 40 \u0623\u0633\u0628\u0648\u0639\u064a\u0629",
@@ -230,12 +236,11 @@ BUNDLE_ORDER = [
     "\u0628\u0627\u0642\u0629 \u0631\u0627\u0648\u062a\u0631 110",
     "\u0628\u0627\u0642\u0629 \u0623\u0633\u0628\u0648\u0639\u064a\u0629 12000 \u0628\u0644\u0627 \u062d\u062f\u0648\u062f",
     "\u0628\u0627\u0642\u0629 \u0623\u0631\u0628\u0639\u064a\u0646",
-    "\u0628\u0627\u0642\u0629 \u0628\u0631\u064a\u0645\u064a\u0648\u0645",
+    "\u0628\u0627\u0642\u0629 \u064a\u0648\u0645\u064a\u0629",
 ]
 
 BUNDLE_FAMILY = {}
 for _lbl in [
-    "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 3 \u0623\u0634\u0647\u0631",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 5",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 10",
@@ -256,6 +261,8 @@ for _lbl in [
     BUNDLE_FAMILY[_lbl] = "use"
 
 LINE_FAMILY = {RED: "red", USE: "use", USE_1M: "use"}
+
+SKIP_BUNDLE = "__skip__"   # bundle rows that are intentionally dropped
 
 MONTHS = [
     "\u0643\u0627\u0646\u0648\u0646 \u0627\u0644\u062b\u0627\u0646\u064a",
@@ -409,6 +416,8 @@ def classify_bundle(name_n, sub_n):
         for key, label in spec["sub"]:
             if key in sub_n:
                 return label
+        if spec["base"] is None:
+            return SKIP_BUNDLE
         return spec["base"]
     return BUNDLE_DIRECT.get(name_n)
 
@@ -436,9 +445,15 @@ def pick_sheet(sheets, label):
 def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
     a_idx = 1   # agents: B = office number
     d_idx = 5   # distribution: F = office number
+    have_agents = agents is not None
+    have_dist = dist is not None
+    if not have_agents:
+        agents = pd.DataFrame({i: pd.Series(dtype=str) for i in range(3)})
+    if not have_dist:
+        dist = pd.DataFrame({i: pd.Series(dtype=str) for i in range(9)})
     a_keys = agents.iloc[:, a_idx].apply(last10)
     d_keys = dist.iloc[:, d_idx].apply(last10)
-    if len(set(a_keys.dropna()) & set(d_keys.dropna())) == 0:
+    if have_agents and have_dist and len(set(a_keys.dropna()) & set(d_keys.dropna())) == 0:
         n_best, bi, bj = find_key_columns(agents, dist)
         if n_best > 0:
             a_idx = bi
@@ -510,24 +525,36 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
         live_removed_main = int(in_live.sum())
         d = d[~in_live].copy()
 
-    if d.empty:
+    if d.empty and have_dist:
         st.error(T["empty"])
         return None
 
-    merged = d.merge(agents_df, on="key", how="left")
-    unmatched = int(merged[T["office_name"]].isna().sum())
-    src_sets[T["dist"]] = set(merged["key"].dropna())
+    if have_dist:
+        merged = d.merge(agents_df, on="key", how="left")
+        unmatched = int(merged[T["office_name"]].isna().sum())
+        src_sets[T["dist"]] = set(merged["key"].dropna())
 
-    result = pd.crosstab(
-        [merged["key"], merged[T["office_name"]].fillna(T["unmatched"])],
-        merged[T["item"]],
-    )
-    for col in [RED, USE, DAILY, MONTHLY, BIG_ROUTER, SMALL_MIFI]:
-        if col not in result.columns:
-            result[col] = 0
-    result[T["total"]] = result[RED] + result[USE]
-    result = result.sort_values(T["total"], ascending=False).reset_index()
-    result = result.rename(columns={"key": T["office_no"]})
+        result = pd.crosstab(
+            [merged["key"], merged[T["office_name"]].fillna(T["unmatched"])],
+            merged[T["item"]],
+        )
+        for col in [RED, USE, DAILY, MONTHLY, BIG_ROUTER, SMALL_MIFI]:
+            if col not in result.columns:
+                result[col] = 0
+        result[T["total"]] = result[RED] + result[USE]
+        result = result.sort_values(T["total"], ascending=False).reset_index()
+        result = result.rename(columns={"key": T["office_no"]})
+    else:
+        # no distribution report: the table is built from the offices found in quality
+        unmatched = 0
+        base_keys = []
+        if q is not None:
+            qg0 = q.iloc[:, Q_TYPE_COL].apply(clean_code).map(QUALITY_TYPE)
+            qk0 = q.iloc[:, Q_OFFICE_COL].apply(last10)
+            base_keys = list(qk0[qg0.notna()].dropna().drop_duplicates())
+        name_map0 = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
+        result = pd.DataFrame({T["office_no"]: base_keys})
+        result[T["office_name"]] = result[T["office_no"]].map(name_map0).fillna(T["unmatched"])
 
     q_msg = None
     points_src = None
@@ -729,10 +756,14 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
             unknown = b.loc[b["label"].isna() & (b["name"] != ""), "name"].value_counts().head(8)
             b_unknown = int(b["label"].isna().sum())
             b = b.dropna(subset=["label", "key"])
+            b = b[b["label"] != SKIP_BUNDLE]
             src_sets[T["bnd"]] = set(b["key"])
 
             agent_keys = set(agents_df["key"])
-            b_nomatch = int((~b["key"].isin(agent_keys)).sum())
+            if have_agents:
+                b_nomatch = int((~b["key"].isin(agent_keys)).sum())
+            else:
+                b_nomatch = 0
 
             if len(b) > 0:
                 tbl = b.groupby(["key", "label"]).size().unstack(fill_value=0)
@@ -844,7 +875,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
     unmatched_df = None
     agent_key_set = set(agents_df["key"])
     um_mask = ~result[T["office_no"]].isin(agent_key_set)
-    um_count = int(um_mask.sum())
+    um_count = int(um_mask.sum()) if have_agents else 0
     if um_count > 0:
         # numbers from the distribution file that are not in agents column B:
         # not shown in the table, only reported here so nothing is lost silently
@@ -853,13 +884,14 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
         result = result[~um_mask].reset_index(drop=True)
 
     st.success(T["done"] + ": " + str(len(result)) + " | " + T["unm_rows"] + ": " + str(unmatched))
-    st.info(
-        T["orig"] + ": " + str(total_rows)
-        + " | " + T["dedup"] + ": " + str(after_dedup)
-        + " | " + T["real"] + ": " + str(len(d))
-        + " | " + T["bad_dates"] + ": " + str(bad_dates)
-    )
-    if live is not None:
+    if have_dist:
+        st.info(
+            T["orig"] + ": " + str(total_rows)
+            + " | " + T["dedup"] + ": " + str(after_dedup)
+            + " | " + T["real"] + ": " + str(len(d))
+            + " | " + T["bad_dates"] + ": " + str(bad_dates)
+        )
+    if live is not None and have_dist:
         st.info(
             T["live_info"] + ": " + str(len(live_set))
             + " | " + T["live_main"] + ": " + str(live_removed_main)
@@ -1253,7 +1285,9 @@ with st.expander(T["tgt_title"] + " - " + mk, expanded=True):
     with t3:
         tgt_use = st.number_input(T["tgt_use"], min_value=0, value=int(saved_t.get("use", 0)), step=100, key="tgt_use_" + mk)
 
-if agents_file is not None and dist_file is not None:
+if quality_file is None:
+    st.info(T["q_required"])
+else:
     agents = None
     dist = None
     q = None
@@ -1262,14 +1296,16 @@ if agents_file is not None and dist_file is not None:
     bnd = None
     live = None
 
-    with c1:
-        sh = load_report(agents_file, T["agents"])
-        if sh is not None:
-            agents = pick_sheet(sh, T["agents"])
-    with c2:
-        sh = load_report(dist_file, T["dist"])
-        if sh is not None:
-            dist = pick_sheet(sh, T["dist"])
+    if agents_file is not None:
+        with c1:
+            sh = load_report(agents_file, T["agents"])
+            if sh is not None:
+                agents = pick_sheet(sh, T["agents"])
+    if dist_file is not None:
+        with c2:
+            sh = load_report(dist_file, T["dist"])
+            if sh is not None:
+                dist = pick_sheet(sh, T["dist"])
     if quality_file is not None:
         with c3:
             sh = load_report(quality_file, T["quality"])
@@ -1296,12 +1332,14 @@ if agents_file is not None and dist_file is not None:
             if sh is not None:
                 live = pick_sheet(sh, T["live"])
 
-    if agents is not None and dist is not None:
+    if q is not None:
         with st.expander(T["preview"]):
-            st.write(T["agents"])
-            st.dataframe(agents.head(5))
-            st.write(T["dist"])
-            st.dataframe(dist.head(5))
+            if agents is not None:
+                st.write(T["agents"])
+                st.dataframe(agents.head(5))
+            if dist is not None:
+                st.write(T["dist"])
+                st.dataframe(dist.head(5))
             if q is not None:
                 st.write(T["quality"])
                 st.dataframe(q.head(5))
