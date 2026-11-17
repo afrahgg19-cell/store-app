@@ -57,7 +57,7 @@ T = {
     "up_wal": "\u0627\u0631\u0641\u0639 \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0645\u062d\u0627\u0641\u0638",
     "wal": "\u0645\u062d\u0641\u0638\u0629",
     "wal_info": "\u0627\u0644\u0645\u062d\u0627\u0641\u0638: \u0639\u062f\u062f \u0627\u0644\u0635\u0641\u0648\u0641",
-    "wal_after": "\u0628\u0639\u062f \u0641\u0644\u062a\u0631 Y",
+    "wal_after": "\u0628\u0639\u062f \u0641\u0644\u062a\u0631 10000 \u0648\u0641\u0648\u0642",
     "wal_offices": "\u0645\u0643\u0627\u062a\u0628 \u0628\u0627\u0644\u0645\u062d\u0627\u0641\u0638",
     "up_bnd": "\u0627\u0631\u0641\u0639 \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0628\u0627\u0642\u0627\u062a",
     "bnd": "\u0627\u0644\u0628\u0627\u0642\u0627\u062a",
@@ -149,8 +149,9 @@ DATE_COL = 3
 Q_POINTS_COL = 17   # R = points
 INC_OFFICE_COL = 0  # incentive: A = office number
 INC_VALUE_COL = 7   # incentive: H = value (zeros removed)
-WAL_OFFICE_COL = 1  # wallets: B = office number
-WAL_FLAG_COL = 2    # wallets: C = flag (keep rows with Y)
+WAL_OFFICE_COL = 3  # wallets: D = office number (matched with agents B)
+WAL_VALUE_COL = 5   # wallets: F = value
+WAL_MIN = 10000     # wallets: keep only values >= 10000
 
 # ===== Bundles report (A = office number, H = sub-type) =====
 BND_OFFICE_COL = 0   # bundles: A = office number (matched with agents B)
@@ -662,13 +663,17 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
 
     wal_msg = None
     if wal is not None:
+        # wallets: D = office number (matched with agents B), F = value, keep only >= 10000
         wal_df = pd.DataFrame({
             "key": wal.iloc[:, WAL_OFFICE_COL].apply(last10),
-            "flag": wal.iloc[:, WAL_FLAG_COL].astype(str).str.strip().str.lower(),
+            "val": pd.to_numeric(
+                wal.iloc[:, WAL_VALUE_COL].astype(str).str.replace(",", "", regex=False),
+                errors="coerce",
+            ),
         })
         wal_total = len(wal_df)
-        wal_df = wal_df.dropna(subset=["key"])
-        wal_df = wal_df[wal_df["flag"] == "y"]
+        wal_df = wal_df.dropna(subset=["key", "val"])
+        wal_df = wal_df[wal_df["val"] >= WAL_MIN]
         wal_after = len(wal_df)
         wal_keys = wal_df["key"].drop_duplicates()
         src_sets[T["wal"]] = set(wal_keys)
