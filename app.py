@@ -67,7 +67,7 @@ T = {
     "bnd_mm": "\u0628\u0627\u0642\u0627\u062a \u0645\u062e\u0627\u0644\u0641\u0629",
     "bnd_col": "\u0639\u0645\u0648\u062f \u0627\u0633\u0645 \u0627\u0644\u0628\u0627\u0642\u0629",
     "bnd_noname": "\u0645\u0627 \u0644\u0642\u064a\u062a \u0639\u0645\u0648\u062f \u0627\u0633\u0645 \u0627\u0644\u0628\u0627\u0642\u0629 \u0628\u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0628\u0627\u0642\u0627\u062a",
-    "bnd_unames": "\u0623\u0633\u0645\u0627\u0621 \u0628\u0627\u0642\u0627\u062a \u063a\u064a\u0631 \u0645\u0639\u0631\u0648\u0641\u0629",
+    "bnd_unames": "\u0628\u0627\u0642\u0627\u062a \u063a\u064a\u0631 \u0645\u0639\u0631\u0648\u0641\u0629 \u0627\u0646\u0636\u0627\u0641\u062a \u0628\u0623\u0633\u0645\u0627\u0626\u0647\u0627",
     "mm_ru": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0639\u0644\u0649 \u062e\u0637 \u0631\u064a\u062f",
     "mm_ur": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0639\u0644\u0649 \u062e\u0637 \u064a\u0648\u0632",
     "mm_title": "\u0627\u0644\u0628\u0627\u0642\u0627\u062a \u0627\u0644\u0645\u062e\u0627\u0644\u0641\u0629 (\u0645\u0641\u0631\u0648\u0632\u0629 \u0644\u062d\u0627\u0644\u0647\u0627)",
@@ -158,15 +158,27 @@ WAL_MIN = 10000     # wallets: keep only values >= 10000
 BND_OFFICE_COL = 0   # bundles: A = office number (matched with agents B)
 BND_SUB_COL = 7
 
+# one label for: tesla new data bundle daily / daily300mb / weekly3gb
+BUNDLE_300_TESLA = "باقة 300 وتسلا و3كيكا"
+
 BUNDLE_DIRECT = {
     "red 15,000 monthly package": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
     "red 15 4 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
     "red 15 for 12 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
+    "red 15 for 3 months": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
     "red 30 4 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
     "red 30 for 12 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
-    "yooz 30 mix": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
-    "yooz 30 extra voice": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
+    "red 30,000 monthly package": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
+    "yooz 30 mix": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 30",
+    "yooz 30 extra voice": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 30",
     "red 25 for 12 weeks": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 25",
+    "red 25,000 monthly package": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 25",
+    "yooz 5 mix": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0627\u0645 5",
+    "yooz 10 mix": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 10",
+    "tesla new data bundle daily": BUNDLE_300_TESLA,
+    "daily300mb": BUNDLE_300_TESLA,
+    "weekly3gb": BUNDLE_300_TESLA,
+    "daily300mb weekly3gb": BUNDLE_300_TESLA,
     "unlimited daily 4g": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0645\u064a\u0629",
     "monthly10gb": "\u0628\u0627\u0642\u0629 \u0625\u0646\u062a\u0631\u0646\u062a \u0634\u0647\u0631\u064a\u0629 \u0628\u0644\u0627 \u062d\u062f\u0648\u062f",
     "yooz 15-extra voice for 12 weeks": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 15000",
@@ -223,6 +235,7 @@ BUNDLE_ORDER = [
     "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0631\u064a\u062f 40 \u0623\u0633\u0628\u0648\u0639\u064a\u0629",
     "\u0628\u0627\u0642\u0629 \u0628\u0631\u064a\u0645\u064a\u0648\u0645 \u0631\u064a\u062f",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0627\u0645 5",
+    "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 10",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0623\u0633\u0628\u0648\u0639\u064a\u0629 12000",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 15000",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 25",
@@ -237,6 +250,7 @@ BUNDLE_ORDER = [
     "\u0628\u0627\u0642\u0629 \u0623\u0633\u0628\u0648\u0639\u064a\u0629 12000 \u0628\u0644\u0627 \u062d\u062f\u0648\u062f",
     "\u0628\u0627\u0642\u0629 \u0623\u0631\u0628\u0639\u064a\u0646",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0645\u064a\u0629",
+    BUNDLE_300_TESLA,
 ]
 
 BUNDLE_FAMILY = {}
@@ -252,6 +266,7 @@ for _lbl in [
     BUNDLE_FAMILY[_lbl] = "red"
 for _lbl in [
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0627\u0645 5",
+    "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 10",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 15000",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 25",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 30",
@@ -753,8 +768,18 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
             })
             b_total = len(b)
             b["label"] = [classify_bundle(n, s2) for n, s2 in zip(b["name"], b["sub"])]
-            unknown = b.loc[b["label"].isna() & (b["name"] != ""), "name"].value_counts().head(8)
-            b_unknown = int(b["label"].isna().sum())
+            # names that are not in the lists keep their own (original) name as a column
+            raw_names = bnd.iloc[:, name_idx].map(
+                lambda x: "" if pd.isna(x) else re.sub(r"\s+", " ", str(x)).strip()
+            )
+            first_seen = {}
+            for nm_n, nm_raw in zip(b["name"], raw_names):
+                if nm_n and nm_n not in first_seen:
+                    first_seen[nm_n] = nm_raw
+            is_unknown = b["label"].isna() & (b["name"] != "")
+            b.loc[is_unknown, "label"] = b.loc[is_unknown, "name"].map(first_seen)
+            unknown = b.loc[is_unknown, "label"].value_counts().head(8)
+            b_unknown = int(is_unknown.sum())
             b = b.dropna(subset=["label", "key"])
             b = b[b["label"] != SKIP_BUNDLE]
             src_sets[T["bnd"]] = set(b["key"])
@@ -777,6 +802,11 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
             rep_map5 = dict(zip(agents_df["key"], agents_df[T["rep"]]))
             tbl.insert(2, T["rep"], tbl[T["office_no"]].map(rep_map5).fillna(""))
             ordered_b = [c for c in BUNDLE_ORDER if c in tbl.columns]
+            # unknown names go after the known ones (most used first), under their own names
+            extra_b = [c for c in tbl.columns
+                       if c not in ordered_b and c not in (T["office_name"], T["office_no"], T["rep"])]
+            extra_b.sort(key=lambda c: -int(tbl[c].sum()))
+            ordered_b = ordered_b + extra_b
             tbl = tbl[[T["office_name"], T["office_no"], T["rep"]] + ordered_b]
             if len(ordered_b) > 0:
                 tot_b = tbl[ordered_b].sum(axis=1)
