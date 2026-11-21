@@ -160,6 +160,11 @@ BND_SUB_COL = 7
 
 # one label for: tesla new data bundle daily / daily300mb / weekly3gb
 BUNDLE_300_TESLA = "باقة 300 وتسلا و3كيكا"
+BUNDLE_IRAN = "باقة ايران"
+BUNDLE_MISC = "باقات متفرقة"
+BUNDLE_PUBG = "بوبجي"
+BUNDLE_RED20 = "باقة ريد 20"
+BUNDLE_YOOZ20 = "باقة يوز 20"
 
 BUNDLE_DIRECT = {
     "red 15,000 monthly package": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
@@ -175,6 +180,22 @@ BUNDLE_DIRECT = {
     "red 25,000 monthly package": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 25",
     "yooz 5 mix": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0627\u0645 5",
     "yooz 10 mix": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 10",
+    "yooz 10 extra voice": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 10",
+    "yooz 10 extra data": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 10",
+    "yooz 20 extra data": BUNDLE_YOOZ20,
+    "yooz 25 extra voice": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 25",
+    "yooz 25 extra data-3 months": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 25",
+    "yooz 25 extra voice-3 months": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 25",
+    "yooz 30 extra data-3 months": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 30",
+    "red 20 for 3 months": BUNDLE_RED20,
+    "red 20,000 monthly package": BUNDLE_RED20,
+    "red 25 for 3 months": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 25",
+    "monthly5gb": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0645\u064a\u0629",
+    "weekly iran & uae package": BUNDLE_IRAN,
+    "tesla new data bundle weekly": BUNDLE_MISC,
+    "passport package 10gb": BUNDLE_MISC,
+    "daily iran & uae package": BUNDLE_MISC,
+    "pubg": BUNDLE_PUBG,
     "tesla new data bundle daily": BUNDLE_300_TESLA,
     "daily300mb": BUNDLE_300_TESLA,
     "weekly3gb": BUNDLE_300_TESLA,
@@ -230,12 +251,14 @@ BUNDLE_ORDER = [
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 10",
     "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0631\u064a\u062f 12000 \u0623\u0633\u0628\u0648\u0639\u064a\u0629",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
+    BUNDLE_RED20,
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 25",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
     "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0631\u064a\u062f 40 \u0623\u0633\u0628\u0648\u0639\u064a\u0629",
     "\u0628\u0627\u0642\u0629 \u0628\u0631\u064a\u0645\u064a\u0648\u0645 \u0631\u064a\u062f",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0627\u0645 5",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 10",
+    BUNDLE_YOOZ20,
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0623\u0633\u0628\u0648\u0639\u064a\u0629 12000",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 15000",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 25",
@@ -251,6 +274,9 @@ BUNDLE_ORDER = [
     "\u0628\u0627\u0642\u0629 \u0623\u0631\u0628\u0639\u064a\u0646",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0645\u064a\u0629",
     BUNDLE_300_TESLA,
+    BUNDLE_IRAN,
+    BUNDLE_PUBG,
+    BUNDLE_MISC,
 ]
 
 BUNDLE_FAMILY = {}
@@ -1419,23 +1445,4 @@ else:
                             st.info(result.attrs.get("monthly_msg"))
                     um_df = result.attrs.get("unmatched")
                     if um_df is not None and len(um_df) > 0:
-                        st.write(T["um_title"])
-                        show_table(um_df)
-                        after_points.append((T["unmatched"], um_df))
-                    points_info = None
-                    points_src = result.attrs.get("points_src")
-                    if points_src is not None:
-                        points_info = build_points_table(points_src, tgt_net, tgt_red, tgt_use)
-                    if points_info is not None:
-                        st.write(T["pts_sheet"])
-                        st.dataframe(points_info["display"], use_container_width=True)
-                    xlsx_bytes = format_excel(result, extras, points_info, after_points)
-                    st.download_button(
-                        T["download"],
-                        data=xlsx_bytes,
-                        file_name=report_file_name(),
-                        mime=XLSX_MIME,
-                    )
-            except Exception:
-                st.error(T["err"])
-                st.code(traceback.format_exc())
+ 
