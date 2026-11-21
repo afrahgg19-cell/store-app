@@ -1445,4 +1445,23 @@ else:
                             st.info(result.attrs.get("monthly_msg"))
                     um_df = result.attrs.get("unmatched")
                     if um_df is not None and len(um_df) > 0:
- 
+                        st.write(T["um_title"])
+                        show_table(um_df)
+                        after_points.append((T["unmatched"], um_df))
+                    points_info = None
+                    points_src = result.attrs.get("points_src")
+                    if points_src is not None:
+                        points_info = build_points_table(points_src, tgt_net, tgt_red, tgt_use)
+                    if points_info is not None:
+                        st.write(T["pts_sheet"])
+                        st.dataframe(points_info["display"], use_container_width=True)
+                    xlsx_bytes = format_excel(result, extras, points_info, after_points)
+                    st.download_button(
+                        T["download"],
+                        data=xlsx_bytes,
+                        file_name=report_file_name(),
+                        mime=XLSX_MIME,
+                    )
+            except Exception:
+                st.error(T["err"])
+                st.code(traceback.format_exc())
