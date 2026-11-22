@@ -57,7 +57,7 @@ T = {
     "up_wal": "\u0627\u0631\u0641\u0639 \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0645\u062d\u0627\u0641\u0638",
     "wal": "\u0645\u062d\u0641\u0638\u0629",
     "wal_info": "\u0627\u0644\u0645\u062d\u0627\u0641\u0638: \u0639\u062f\u062f \u0627\u0644\u0635\u0641\u0648\u0641",
-    "wal_after": "\u0628\u0639\u062f \u0641\u0644\u062a\u0631 10000 \u0648\u0641\u0648\u0642",
+    "wal_after": "\u0628\u0639\u062f \u0641\u0644\u062a\u0631 5000 \u0648\u0641\u0648\u0642",
     "wal_offices": "\u0645\u0643\u0627\u062a\u0628 \u0628\u0627\u0644\u0645\u062d\u0627\u0641\u0638",
     "up_bnd": "\u0627\u0631\u0641\u0639 \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0628\u0627\u0642\u0627\u062a",
     "bnd": "\u0627\u0644\u0628\u0627\u0642\u0627\u062a",
@@ -118,7 +118,7 @@ T = {
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
-    "q_required": "\u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0643\u0648\u0627\u0644\u062a\u064a \u0625\u062c\u0628\u0627\u0631\u064a\u060c \u0627\u0631\u0641\u0639\u0647 \u062d\u062a\u0649 \u064a\u0634\u062a\u063a\u0644 \u0627\u0644\u062d\u0633\u0627\u0628 (\u0628\u0627\u0642\u064a \u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631 \u0627\u062e\u062a\u064a\u0627\u0631\u064a\u0629)",
+    "q_required": "\u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0648\u0643\u0644\u0627\u0621 \u0625\u062c\u0628\u0627\u0631\u064a\u060c \u0627\u0631\u0641\u0639\u0647 \u062d\u062a\u0649 \u064a\u0634\u062a\u063a\u0644 \u0627\u0644\u062d\u0633\u0627\u0628 (\u0628\u0627\u0642\u064a \u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631 \u0627\u062e\u062a\u064a\u0627\u0631\u064a\u0629)",
     "monthly_sheet": "\u0634\u064a\u062a \u0627\u0644\u062a\u0648\u0632\u064a\u0639 \u0627\u0644\u0634\u0647\u0631\u064a",
 }
 
@@ -156,7 +156,7 @@ INC_OFFICE_COL = 0  # incentive: A = office number
 INC_VALUE_COL = 7   # incentive: H = value (zeros removed)
 WAL_OFFICE_COL = 3  # wallets: D = office number (matched with agents B)
 WAL_VALUE_COL = 5   # wallets: F = value
-WAL_MIN = 10000     # wallets: keep only values >= 10000
+WAL_MIN = 5000      # wallets: keep only values >= 5000 (5000 itself counts)
 
 # ===== Bundles report (A = office number, H = sub-type) =====
 BND_OFFICE_COL = 0   # bundles: A = office number (matched with agents B)
@@ -562,6 +562,29 @@ def pick_sheet(sheets, label):
     return sheets[chosen]
 
 
+def add_missing_keys(result, keys, name_map):
+    # adds offices that are not in the table yet (all numbers 0, text empty).
+    # used so every office of the agents file appears even with no distribution,
+    # and so numbers found in other reports are not lost (they go to the unmatched sheet).
+    have = set(result[T["office_no"]])
+    miss = []
+    for k in keys:
+        if k is not None and not pd.isna(k) and k not in have and k not in miss:
+            miss.append(k)
+    if not miss:
+        return result
+    add = pd.DataFrame({T["office_no"]: miss})
+    for c in result.columns:
+        if c == T["office_no"]:
+            continue
+        if pd.api.types.is_numeric_dtype(result[c]):
+            add[c] = 0
+        else:
+            add[c] = ""
+    add[T["office_name"]] = add[T["office_no"]].map(name_map).fillna(T["unmatched"])
+    return pd.concat([result, add[list(result.columns)]], ignore_index=True)
+
+
 def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
     a_idx = 1   # agents: B = office number
     d_idx = 5   # distribution: F = office number
@@ -676,6 +699,10 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
         result = pd.DataFrame({T["office_no"]: base_keys})
         result[T["office_name"]] = result[T["office_no"]].map(name_map0).fillna(T["unmatched"])
 
+    # every office of the agents file is in the first sheet, even with no distribution (all zeros)
+    name_map_all = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
+    result = add_missing_keys(result, list(agents_df["key"]), name_map_all)
+
     q_msg = None
     points_src = None
     if q is not None:
@@ -743,6 +770,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
                 T["pts_last_net"]: T["pts_last_net"] + " " + day_txt,
             })
 
+        result = add_missing_keys(result, list(q_all[T["office_no"]]), name_map_all)
         result = result.merge(q_all, on=T["office_no"], how="left")
 
         name_map = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
@@ -785,6 +813,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
         src_sets[T["inc"]] = set(inc_keys)
         inc_tbl = pd.DataFrame({T["office_no"]: inc_keys, T["inc"]: "done"})
 
+        result = add_missing_keys(result, list(inc_keys), name_map_all)
         result = result.merge(inc_tbl, on=T["office_no"], how="left")
 
         name_map2 = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
@@ -826,6 +855,7 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
         src_sets[T["wal"]] = set(wal_keys)
         wal_tbl = pd.DataFrame({T["office_no"]: wal_keys, T["wal"]: "done"})
 
+        result = add_missing_keys(result, list(wal_keys), name_map_all)
         result = result.merge(wal_tbl, on=T["office_no"], how="left")
 
         name_map3 = dict(zip(agents_df["key"], agents_df[T["office_name"]]))
@@ -1024,6 +1054,19 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
     rest = [c for c in result.columns if c not in ordered]
     result = result[ordered + rest]
 
+    # sort: daily line activation (red + use) biggest first, then total line activation,
+    # then the distribution total
+    sk = pd.DataFrame(index=result.index)
+    daily_cols = [c for c in result.columns if str(c).startswith(T["last_ru"])]
+    sk["a"] = result[daily_cols[0]] if daily_cols else 0
+    if T["act_red"] in result.columns and T["act_use"] in result.columns:
+        sk["b"] = result[T["act_red"]] + result[T["act_use"]]
+    else:
+        sk["b"] = 0
+    sk["c"] = result[T["total"]] if T["total"] in result.columns else 0
+    sorted_idx = sk.sort_values(["a", "b", "c"], ascending=False, kind="stable").index
+    result = result.loc[sorted_idx].reset_index(drop=True)
+
     ren = {}
     for c in [RED, USE, DAILY, MONTHLY, BIG_ROUTER, SMALL_MIFI, USE_1M]:
         if c in result.columns:
@@ -1035,10 +1078,9 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
     um_mask = ~result[T["office_no"]].isin(agent_key_set)
     um_count = int(um_mask.sum()) if have_agents else 0
     if um_count > 0:
-        # numbers from the distribution file that are not in agents column B:
-        # not shown in the table, only reported here so nothing is lost silently
-        um_keys = [str(k) for k in result.loc[um_mask, T["office_no"]].tolist()]
-        st.warning(T["um_warn"] + ": " + str(um_count) + " | " + " , ".join(um_keys[:15]))
+        # numbers found in the reports but not in agents column B: moved to their own sheet
+        unmatched_df = result[um_mask].reset_index(drop=True)
+        st.warning(T["um_msg"] + ": " + str(um_count))
         result = result[~um_mask].reset_index(drop=True)
 
     st.success(T["done"] + ": " + str(len(result)) + " | " + T["unm_rows"] + ": " + str(unmatched))
@@ -1443,7 +1485,7 @@ with st.expander(T["tgt_title"] + " - " + mk, expanded=True):
     with t3:
         tgt_use = st.number_input(T["tgt_use"], min_value=0, value=int(saved_t.get("use", 0)), step=100, key="tgt_use_" + mk)
 
-if quality_file is None:
+if agents_file is None:
     st.info(T["q_required"])
 else:
     agents = None
@@ -1490,7 +1532,7 @@ else:
             if sh is not None:
                 live = pick_sheet(sh, T["live"])
 
-    if q is not None:
+    if agents is not None:
         with st.expander(T["preview"]):
             if agents is not None:
                 st.write(T["agents"])
