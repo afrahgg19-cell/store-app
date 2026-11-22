@@ -55,6 +55,15 @@ def _pass_ok(stored, given):
     return hmac.compare_digest(given.encode("utf-8"), stored.encode("utf-8"))
 
 
+def _ti(label, **kw):
+    # autocomplete lets the browser save/fill the username and password (not the code)
+    try:
+        return st.text_input(label, **kw)
+    except TypeError:
+        kw.pop("autocomplete", None)
+        return st.text_input(label, **kw)
+
+
 def require_login():
     if st.session_state.get("auth_ok"):
         return
@@ -69,9 +78,9 @@ def require_login():
         st.stop()
     st.title("تسجيل الدخول")
     with st.form("login_form"):
-        u = st.text_input("اسم المستخدم")
-        p = st.text_input("كلمة السر", type="password")
-        c = st.text_input("الرمز من تطبيق المصادقة (6 أرقام)")
+        u = _ti("اسم المستخدم", key="login_user", autocomplete="username")
+        p = _ti("كلمة السر", type="password", key="login_pass", autocomplete="current-password")
+        c = _ti("الرمز من تطبيق المصادقة (6 أرقام)", key="login_code", autocomplete="one-time-code")
         go = st.form_submit_button("دخول")
     if go:
         name = u.strip()
