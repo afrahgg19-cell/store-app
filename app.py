@@ -112,7 +112,9 @@ T = {
     "live_month": "\u0627\u0646\u0634\u0627\u0644\u062a \u0645\u0646 \u0627\u0644\u0634\u064a\u062a \u0627\u0644\u0634\u0647\u0631\u064a",
     "live_none": "\u0645\u0627 \u0644\u0642\u064a\u062a \u0623\u064a \u0631\u0642\u0645 \u0645\u0634\u062a\u0631\u0643 \u0628\u064a\u0646 \u0627\u0644\u062a\u0648\u0632\u064a\u0639 \u0648\u0627\u0644\u0627\u064a\u0641 \u0633\u062a\u0648\u0643",
     "bnd_typed": "\u0635\u0641\u0648\u0641 \u0646\u0648\u0639 \u062e\u0637\u0647\u0627 \u0645\u0639\u0631\u0648\u0641 (\u0645\u0646 \u0639\u0645\u0648\u062f H)",
-    "bnd_drop": "\u0628\u0627\u0642\u0627\u062a \u0627\u0646\u062d\u0630\u0641\u062a (\u062e\u0637 \u0631\u064a\u062f \u0628\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 / \u062e\u0637 \u064a\u0648\u0632 \u0628\u0628\u0627\u0642\u0629 \u0631\u064a\u062f)",
+    "bnd_drop": "\u0628\u0627\u0642\u0627\u062a \u0627\u0646\u0641\u0635\u0644\u062a \u0644\u062d\u0642\u0644 \u0645\u0646\u0641\u0635\u0644 (\u062e\u0637 \u0631\u064a\u062f \u0645\u0633\u0648\u064a \u064a\u0648\u0632 / \u062e\u0637 \u064a\u0648\u0632 \u0645\u0633\u0648\u064a \u0631\u064a\u062f)",
+    "mm_red_use": "\u062e\u0637 \u0631\u064a\u062f \u0645\u0633\u0648\u064a \u064a\u0648\u0632",
+    "mm_use_red": "\u062e\u0637 \u064a\u0648\u0632 \u0645\u0633\u0648\u064a \u0631\u064a\u062f",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
@@ -841,16 +843,20 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
             b = b.dropna(subset=["label", "key"])
             b = b[b["label"] != SKIP_BUNDLE]
 
-            # red line must only take red bundles, use line only use bundles: anything else is removed
+            # red line with any non-red bundle -> separate field "red line did use";
+            # use line with any non-use bundle -> separate field "use line did red".
+            # these rows are taken out of the normal bundle columns and counted per office
             b["lfam"] = b["sub"].map(line_family_of)
             b["bfam"] = [bundle_family_of(lb, nm) for lb, nm in zip(b["label"], b["name"])]
-            bad_ru = (b["lfam"] == "red") & (b["bfam"] == "use")
-            bad_ur = (b["lfam"] == "use") & (b["bfam"] == "red")
+            bad_ru = (b["lfam"] == "red") & (b["bfam"] != "red")
+            bad_ur = (b["lfam"] == "use") & (b["bfam"] != "use")
             b_typed = int(b["lfam"].notna().sum())
             b_drop_ru = int(bad_ru.sum())
             b_drop_ur = int(bad_ur.sum())
+            mm_ru_cnt = b.loc[bad_ru].groupby("key").size()
+            mm_ur_cnt = b.loc[bad_ur].groupby("key").size()
             b = b[~(bad_ru | bad_ur)].copy()
-            src_sets[T["bnd"]] = set(b["key"])
+            src_sets[T["bnd"]] = set(b["key"]) | set(mm_ru_cnt.index) | set(mm_ur_cnt.index)
 
             agent_keys = set(agents_df["key"])
             if have_agents:
@@ -862,6 +868,12 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
                 tbl = b.groupby(["key", "label"]).size().unstack(fill_value=0)
             else:
                 tbl = pd.DataFrame()
+            # offices that only have separated rows must still appear in the sheet
+            all_keys = tbl.index.union(mm_ru_cnt.index).union(mm_ur_cnt.index)
+            tbl = tbl.reindex(all_keys, fill_value=0)
+            tbl[T["mm_red_use"]] = mm_ru_cnt.reindex(all_keys).fillna(0).astype(int)
+            tbl[T["mm_use_red"]] = mm_ur_cnt.reindex(all_keys).fillna(0).astype(int)
+            mm_cols = [T["mm_red_use"], T["mm_use_red"]]
             tbl.index.name = T["office_no"]
             tbl.columns.name = None
             tbl = tbl.reset_index()
@@ -872,13 +884,14 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
             ordered_b = [c for c in BUNDLE_ORDER if c in tbl.columns]
             # unknown names go after the known ones (most used first), under their own names
             extra_b = [c for c in tbl.columns
-                       if c not in ordered_b and c not in (T["office_name"], T["office_no"], T["rep"])]
+                       if c not in ordered_b and c not in mm_cols
+                       and c not in (T["office_name"], T["office_no"], T["rep"])]
             extra_b.sort(key=lambda c: -int(tbl[c].sum()))
             ordered_b = ordered_b + extra_b
-            tbl = tbl[[T["office_name"], T["office_no"], T["rep"]] + ordered_b]
-            if len(ordered_b) > 0:
-                tot_b = tbl[ordered_b].sum(axis=1)
-                tbl = tbl.assign(_t=tot_b).sort_values("_t", ascending=False).drop(columns="_t")
+            # the two separated fields go last
+            tbl = tbl[[T["office_name"], T["office_no"], T["rep"]] + ordered_b + mm_cols]
+            tot_b = tbl[ordered_b + mm_cols].sum(axis=1)
+            tbl = tbl.assign(_t=tot_b).sort_values("_t", ascending=False).drop(columns="_t")
             bundle_df = tbl.reset_index(drop=True)
 
             if hits == 0:
