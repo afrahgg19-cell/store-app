@@ -111,10 +111,12 @@ T = {
     "live_main": "\u0627\u0646\u0634\u0627\u0644\u062a \u0645\u0646 \u0627\u0644\u0628\u0627\u0642\u064a (\u0627\u0644\u0634\u064a\u062a \u0627\u0644\u0623\u0648\u0644)",
     "live_month": "\u0627\u0646\u0634\u0627\u0644\u062a \u0645\u0646 \u0627\u0644\u0634\u064a\u062a \u0627\u0644\u0634\u0647\u0631\u064a",
     "live_none": "\u0645\u0627 \u0644\u0642\u064a\u062a \u0623\u064a \u0631\u0642\u0645 \u0645\u0634\u062a\u0631\u0643 \u0628\u064a\u0646 \u0627\u0644\u062a\u0648\u0632\u064a\u0639 \u0648\u0627\u0644\u0627\u064a\u0641 \u0633\u062a\u0648\u0643",
+    "bnd_typed": "\u0635\u0641\u0648\u0641 \u0646\u0648\u0639 \u062e\u0637\u0647\u0627 \u0645\u0639\u0631\u0648\u0641 (\u0645\u0646 \u0639\u0645\u0648\u062f H)",
+    "bnd_drop": "\u0628\u0627\u0642\u0627\u062a \u0627\u0646\u062d\u0630\u0641\u062a (\u062e\u0637 \u0631\u064a\u062f \u0628\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 / \u062e\u0637 \u064a\u0648\u0632 \u0628\u0628\u0627\u0642\u0629 \u0631\u064a\u062f)",
     "read_fail": "\u062a\u0639\u0630\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0645\u0644\u0641",
     "preview": "\u0645\u0639\u0627\u064a\u0646\u0629 \u0623\u0648\u0644 5 \u0635\u0641\u0648\u0641",
     "err": "\u062d\u062f\u062b \u062e\u0637\u0623",
-    "q_required": "تقرير الكوالتي إجباري، ارفعه حتى يشتغل الحساب (باقي التقارير اختيارية)",
+    "q_required": "\u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0643\u0648\u0627\u0644\u062a\u064a \u0625\u062c\u0628\u0627\u0631\u064a\u060c \u0627\u0631\u0641\u0639\u0647 \u062d\u062a\u0649 \u064a\u0634\u062a\u063a\u0644 \u0627\u0644\u062d\u0633\u0627\u0628 (\u0628\u0627\u0642\u064a \u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631 \u0627\u062e\u062a\u064a\u0627\u0631\u064a\u0629)",
     "monthly_sheet": "\u0634\u064a\u062a \u0627\u0644\u062a\u0648\u0632\u064a\u0639 \u0627\u0644\u0634\u0647\u0631\u064a",
 }
 
@@ -158,13 +160,17 @@ WAL_MIN = 10000     # wallets: keep only values >= 10000
 BND_OFFICE_COL = 0   # bundles: A = office number (matched with agents B)
 BND_SUB_COL = 7
 
+# line type is read from column H (SIM type): red line = usim-prp / usim-prp2, use line = usim-yout
+LINE_RED_KEYS = ("usim-prp",)
+LINE_USE_KEYS = ("usim-yout",)
+
 # one label for: tesla new data bundle daily / daily300mb / weekly3gb
-BUNDLE_300_TESLA = "باقة 300 وتسلا و3كيكا"
-BUNDLE_IRAN = "باقة ايران"
-BUNDLE_MISC = "باقات متفرقة"
-BUNDLE_PUBG = "بوبجي"
-BUNDLE_RED20 = "باقة ريد 20"
-BUNDLE_YOOZ20 = "باقة يوز 20"
+BUNDLE_300_TESLA = "\u0628\u0627\u0642\u0629 300 \u0648\u062a\u0633\u0644\u0627 \u06483\u0643\u064a\u0643\u0627"
+BUNDLE_IRAN = "\u0628\u0627\u0642\u0629 \u0627\u064a\u0631\u0627\u0646"
+BUNDLE_MISC = "\u0628\u0627\u0642\u0627\u062a \u0645\u062a\u0641\u0631\u0642\u0629"
+BUNDLE_PUBG = "\u0628\u0648\u0628\u062c\u064a"
+BUNDLE_RED20 = "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 20"
+BUNDLE_YOOZ20 = "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 20"
 
 BUNDLE_DIRECT = {
     "red 15,000 monthly package": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
@@ -284,6 +290,8 @@ for _lbl in [
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 5",
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 10",
+    "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 15",
+    BUNDLE_RED20,
     "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 25",
     "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0631\u064a\u062f 12000 \u0623\u0633\u0628\u0648\u0639\u064a\u0629",
     "\u0628\u0627\u0642\u0629 \u062e\u0637 \u0631\u064a\u062f 40 \u0623\u0633\u0628\u0648\u0639\u064a\u0629",
@@ -293,6 +301,7 @@ for _lbl in [
 for _lbl in [
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0627\u0645 5",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 10",
+    BUNDLE_YOOZ20,
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 15000",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 25",
     "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 30",
@@ -461,6 +470,29 @@ def classify_bundle(name_n, sub_n):
             return SKIP_BUNDLE
         return spec["base"]
     return BUNDLE_DIRECT.get(name_n)
+
+
+def line_family_of(sub_n):
+    # type of the line from column H: red / use / None (unknown)
+    for k in LINE_RED_KEYS:
+        if k in sub_n:
+            return "red"
+    for k in LINE_USE_KEYS:
+        if k in sub_n:
+            return "use"
+    return None
+
+
+def bundle_family_of(label, name_n):
+    # family of the bundle: red / use / None (net and others)
+    fam = BUNDLE_FAMILY.get(label)
+    if fam is not None:
+        return fam
+    if name_n.startswith("red"):
+        return "red"
+    if name_n.startswith("yooz"):
+        return "use"
+    return None
 
 
 def detect_bundle_col(b):
@@ -808,6 +840,16 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
             b_unknown = int(is_unknown.sum())
             b = b.dropna(subset=["label", "key"])
             b = b[b["label"] != SKIP_BUNDLE]
+
+            # red line must only take red bundles, use line only use bundles: anything else is removed
+            b["lfam"] = b["sub"].map(line_family_of)
+            b["bfam"] = [bundle_family_of(lb, nm) for lb, nm in zip(b["label"], b["name"])]
+            bad_ru = (b["lfam"] == "red") & (b["bfam"] == "use")
+            bad_ur = (b["lfam"] == "use") & (b["bfam"] == "red")
+            b_typed = int(b["lfam"].notna().sum())
+            b_drop_ru = int(bad_ru.sum())
+            b_drop_ur = int(bad_ur.sum())
+            b = b[~(bad_ru | bad_ur)].copy()
             src_sets[T["bnd"]] = set(b["key"])
 
             agent_keys = set(agents_df["key"])
@@ -850,6 +892,8 @@ def compute(agents, dist, q, inc=None, wal=None, bnd=None, live=None):
                 + " | " + T["bnd_unknown"] + ": " + str(b_unknown)
                 + " | " + T["bnd_nomatch"] + ": " + str(b_nomatch)
                 + " | " + T["bnd_col"] + ": " + col_letter
+                + " | " + T["bnd_typed"] + ": " + str(b_typed)
+                + " | " + T["bnd_drop"] + ": " + str(b_drop_ru) + " / " + str(b_drop_ur)
             )
 
     # ===== monthly distribution sheet =====
