@@ -188,6 +188,10 @@ BUNDLE_DIRECT = {
     "red 25,000 monthly package": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f 25",
     "yooz 5 mix": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0627\u0645 5",
     "yooz 10 mix": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 10",
+    "yooz 15 extra data-3 months": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 15000",
+    "yooz 15 extra voice-3 months": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 15000",
+    "red 30 for 3 months": "\u0628\u0627\u0642\u0629 \u0631\u064a\u062f \u0634\u0647\u0631\u064a 30",
+    "yooz 40 extra data": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 \u0623\u0633\u0628\u0648\u0639\u064a\u0629 40",
     "yooz 10 extra voice": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 10",
     "yooz 10 extra data": "\u0628\u0627\u0642\u0629 \u064a\u0648\u0632 10",
     "yooz 20 extra data": BUNDLE_YOOZ20,
@@ -471,7 +475,48 @@ def classify_bundle(name_n, sub_n):
         if spec["base"] is None:
             return SKIP_BUNDLE
         return spec["base"]
-    return BUNDLE_DIRECT.get(name_n)
+    hit = BUNDLE_DIRECT.get(name_n)
+    if hit is not None:
+        return hit
+    return classify_by_pattern(name_n)
+
+
+# Pattern fallback: any "yooz N ..." / "red N ..." variant (extra data / extra voice / mix,
+# with or without "-3 months", "for 12 weeks", ...) goes to the existing bundle of the same N.
+# If there is no existing bundle for that N, the name stays under its own name.
+YOOZ_N_LABEL = {
+    "5": "باقة يوز ام 5",
+    "10": "باقة يوز 10",
+    "15": "باقة يوز 15000",
+    "20": BUNDLE_YOOZ20,
+    "25": "باقة يوز 25",
+    "30": "باقة يوز 30",
+    "40": "باقة يوز أسبوعية 40",
+}
+RED_N_LABEL = {
+    "5": "باقة ريد 5",
+    "10": "باقة ريد 10",
+    "15": "باقة ريد 15",
+    "20": BUNDLE_RED20,
+    "25": "باقة ريد 25",
+    "30": "باقة ريد شهري 30",
+}
+YOOZ_PATTERN = re.compile(
+    r"^yooz (\d+)[ -]?(?:extra (?:voice|data)|mix)(?:[ -]*(?:for )?\d+ (?:months?|weeks?|days?))?$"
+)
+RED_PATTERN = re.compile(
+    r"^red (\d+)(?:,000)? (?:monthly package|weekly package|\d+ weeks?|for \d+ (?:months?|weeks?|days?))$"
+)
+
+
+def classify_by_pattern(name_n):
+    m = YOOZ_PATTERN.match(name_n)
+    if m:
+        return YOOZ_N_LABEL.get(m.group(1))
+    m = RED_PATTERN.match(name_n)
+    if m:
+        return RED_N_LABEL.get(m.group(1))
+    return None
 
 
 def line_family_of(sub_n):
