@@ -1544,158 +1544,714 @@ def show_table(df):
         st.dataframe(df, use_container_width=True)
 
 
-st.title(T["title"])
+# ===== second tab: compare two months (quality reports or bundle reports) =====
+CMP_STATE = "الحالة"
+CMP_TREND = "الاتجاه"
+CMP_DIFF = "الفرق"
+CMP_NEED = "يحتاج خط"
 
-c1, c2, c3 = st.columns(3)
-c4, c5, c6 = st.columns(3)
-c7, c8, c9 = st.columns(3)
-with c1:
-    agents_file = st.file_uploader(T["up_agents"], key="agents")
-with c2:
-    dist_file = st.file_uploader(T["up_dist"], key="dist")
-with c3:
-    quality_file = st.file_uploader(T["up_quality"], key="quality")
-with c4:
-    inc_file = st.file_uploader(T["up_inc"], key="inc")
-with c5:
-    wal_file = st.file_uploader(T["up_wal"], key="wal")
-with c6:
-    bnd_file = st.file_uploader(T["up_bnd"], key="bnd")
-with c7:
-    live_file = st.file_uploader(T["up_live"], key="live")
+# office level inside a month (relative to the average of the active offices of that month).
+# change these two numbers to make the levels stricter or easier
+GOOD_RATIO = 1.0   # good: activity >= the average of active offices
+MID_RATIO = 0.5    # medium: activity >= half of that average (below = weak)
 
-mk = target_month_key()
-saved_t = load_targets().get(mk, {})
-with st.expander(T["tgt_title"] + " - " + mk, expanded=True):
-    t1, t2, t3 = st.columns(3)
-    with t1:
-        tgt_net = st.number_input(T["tgt_net"], min_value=0, value=int(saved_t.get("net", 0)), step=100, key="tgt_net_" + mk)
-    with t2:
-        tgt_red = st.number_input(T["tgt_red"], min_value=0, value=int(saved_t.get("red", 0)), step=100, key="tgt_red_" + mk)
-    with t3:
-        tgt_use = st.number_input(T["tgt_use"], min_value=0, value=int(saved_t.get("use", 0)), step=100, key="tgt_use_" + mk)
+LVL_GOOD, LVL_MID, LVL_WEAK, LVL_NONE = "زين", "متوسط", "ضعيف", "لا شي"
+LVL_RANK = {LVL_NONE: 0, LVL_WEAK: 1, LVL_MID: 2, LVL_GOOD: 3}
+ST_CALL = "بحاجة كول سنتر"
+ST_DROP = "نزل مستواه"
 
-if agents_file is None:
-    st.info(T["q_required"])
-else:
-    agents = None
-    dist = None
-    q = None
-    inc = None
-    wal = None
-    bnd = None
-    live = None
+# sales manager rating (weights are percentages, they are re-scaled if a target is not set)
+MGR_WEIGHTS_Q = {"net": 15, "red": 15, "use": 15, "act": 15, "pts": 10, "active": 15, "keep": 10, "call": 5}
+MGR_WEIGHTS_B = {"act": 30, "active": 30, "keep": 25, "call": 15}
+MGR_RATING = [(90, "ممتاز"), (75, "جيد جداً"), (60, "جيد"), (40, "متوسط"), (0, "ضعيف")]
 
-    if agents_file is not None:
-        with c1:
-            sh = load_report(agents_file, T["agents"])
-            if sh is not None:
-                agents = pick_sheet(sh, T["agents"])
-    if dist_file is not None:
-        with c2:
-            sh = load_report(dist_file, T["dist"])
-            if sh is not None:
-                dist = pick_sheet(sh, T["dist"])
-    if quality_file is not None:
-        with c3:
-            sh = load_report(quality_file, T["quality"])
-            if sh is not None:
-                q = pick_sheet(sh, T["quality"])
-    if inc_file is not None:
-        with c4:
-            sh = load_report(inc_file, T["inc"])
-            if sh is not None:
-                inc = pick_sheet(sh, T["inc"])
-    if wal_file is not None:
-        with c5:
-            sh = load_report(wal_file, T["wal"])
-            if sh is not None:
-                wal = pick_sheet(sh, T["wal"])
-    if bnd_file is not None:
-        with c6:
-            sh = load_report(bnd_file, T["bnd"])
-            if sh is not None:
-                bnd = pick_sheet(sh, T["bnd"])
-    if live_file is not None:
-        with c7:
-            sh = load_report(live_file, T["live"])
-            if sh is not None:
-                live = pick_sheet(sh, T["live"])
 
-    if agents is not None:
-        with st.expander(T["preview"]):
-            if agents is not None:
-                st.write(T["agents"])
-                st.dataframe(agents.head(5))
-            if dist is not None:
-                st.write(T["dist"])
-                st.dataframe(dist.head(5))
-            if q is not None:
-                st.write(T["quality"])
-                st.dataframe(q.head(5))
-            if inc is not None:
-                st.write(T["inc"])
-                st.dataframe(inc.head(5))
-            if wal is not None:
-                st.write(T["wal"])
-                st.dataframe(wal.head(5))
-            if bnd is not None:
-                st.write(T["bnd"])
-                st.dataframe(bnd.head(5))
-            if live is not None:
-                st.write(T["live"])
-                st.dataframe(live.head(5))
+def cmp_status(prev, curr):
+    # trend of an office between the two months
+    if prev == 0 and curr == 0:
+        return "لا يشتغل"
+    if prev == 0:
+        return "جديد"
+    if curr == 0:
+        return "متوقف"
+    if curr > prev:
+        return "صاعد"
+    if curr < prev:
+        return "نازل"
+    return "ثابت"
 
-        if st.button(T["calc"]):
-            save_ok = save_targets(mk, tgt_net, tgt_red, tgt_use)
-            if not save_ok:
-                st.caption(T["tgt_nosave"])
-            try:
-                result = compute(agents, dist, q, inc, wal, bnd, live)
-                if result is not None:
-                    show_table(result)
-                    bundle_df = result.attrs.get("bundles")
-                    mm_df = result.attrs.get("mismatch")
-                    extras = []
-                    after_points = []
-                    if bundle_df is not None:
-                        st.write(T["bnd"])
-                        if len(bundle_df) > 0:
-                            show_table(bundle_df)
-                        else:
-                            st.info(T["bnd_empty"])
-                        extras.append((T["bnd"], bundle_df))
-                    if mm_df is not None and len(mm_df) > 0:
-                        st.write(T["mm_title"])
-                        show_table(mm_df)
-                        extras.append((T["mm_sheet"], mm_df))
-                    monthly_df = result.attrs.get("monthly")
-                    if monthly_df is not None:
-                        m_name = T["monthly_sheet"] + " " + str(result.attrs.get("monthly_month"))
-                        st.write(m_name)
-                        show_table(monthly_df)
-                        after_points = [(m_name, monthly_df)]
-                        if result.attrs.get("monthly_msg"):
-                            st.info(result.attrs.get("monthly_msg"))
-                    um_df = result.attrs.get("unmatched")
-                    if um_df is not None and len(um_df) > 0:
-                        st.write(T["um_title"])
-                        show_table(um_df)
-                        after_points.append((T["unmatched"], um_df))
-                    points_info = None
-                    points_src = result.attrs.get("points_src")
-                    if points_src is not None:
-                        points_info = build_points_table(points_src, tgt_net, tgt_red, tgt_use)
-                    if points_info is not None:
-                        st.write(T["pts_sheet"])
-                        st.dataframe(points_info["display"], use_container_width=True)
-                    xlsx_bytes = format_excel(result, extras, points_info, after_points)
-                    st.download_button(
-                        T["download"],
-                        data=xlsx_bytes,
-                        file_name=report_file_name(),
-                        mime=XLSX_MIME,
-                    )
-            except Exception:
-                st.error(T["err"])
-                st.code(traceback.format_exc())
+
+def cmp_levels(vals, mask):
+    act = vals[mask & (vals > 0)]
+    avg = float(act.mean()) if len(act) else 0.0
+
+    def lv(x):
+        if x <= 0:
+            return LVL_NONE
+        if x >= GOOD_RATIO * avg:
+            return LVL_GOOD
+        if x >= MID_RATIO * avg:
+            return LVL_MID
+        return LVL_WEAK
+    return [lv(x) for x in vals]
+
+
+def cmp_state(prev_lvl, curr_lvl, curr_val):
+    if curr_val <= 0:
+        return ST_CALL
+    if curr_lvl == LVL_WEAK and prev_lvl == LVL_WEAK:
+        return ST_CALL
+    if LVL_RANK[prev_lvl] > LVL_RANK[curr_lvl]:
+        return ST_DROP
+    return curr_lvl
+
+
+def cmp_need_text(red, use, net):
+    missing = []
+    if red <= 0:
+        missing.append("ريد")
+    if use <= 0:
+        missing.append("يوز")
+    if net <= 0:
+        missing.append("نت")
+    if not missing:
+        return "لا يحتاج"
+    txt = missing[0]
+    for m in missing[1:]:
+        txt += " و" + m
+    return "بحاجة خط " + txt
+
+
+def cmp_agents_df(agents):
+    # agents: A = office name, B = office number, C = rep name
+    rep = agents.iloc[:, 2] if agents.shape[1] > 2 else ""
+    df = pd.DataFrame({
+        "key": agents.iloc[:, 1].apply(last10),
+        T["office_name"]: agents.iloc[:, 0],
+        T["rep"]: rep,
+    })
+    return df.dropna(subset=["key"]).drop_duplicates("key")
+
+
+QMETRICS = [
+    "مجموع التفعيل", "تفعيل ريد", "تفعيل يوز", "تفعيل نت",
+    "نقاط الاتصال (ريد ويوز)", "نقاط النت",
+]
+
+
+def cmp_quality_summary(q):
+    # per office: activations by type and points (same columns/types as the main quality logic)
+    qd = pd.DataFrame({
+        "group": q.iloc[:, Q_TYPE_COL].apply(clean_code).map(QUALITY_TYPE),
+        "key": q.iloc[:, Q_OFFICE_COL].apply(last10),
+    })
+    if q.shape[1] > Q_POINTS_COL:
+        qd["pts"] = pd.to_numeric(
+            q.iloc[:, Q_POINTS_COL].astype(str).str.replace(",", "", regex=False), errors="coerce"
+        )
+    else:
+        qd["pts"] = 0.0
+    qd["pts"] = qd["pts"].fillna(0)
+    ignored = int(qd["group"].isna().sum())
+    qd = qd.dropna(subset=["group"])
+    gpts = {g: float(qd.loc[qd["group"] == g, "pts"].sum()) for g in ["red", "use", "net"]}
+    gcnt = {g: int((qd["group"] == g).sum()) for g in ["red", "use", "net"]}
+    qd = qd.dropna(subset=["key"])
+    out = pd.DataFrame(index=pd.Index([], name="key"), columns=QMETRICS, dtype=float)
+    if len(qd) > 0:
+        cnt = pd.crosstab(qd["key"], qd["group"])
+        for g in ["red", "use", "net"]:
+            if g not in cnt.columns:
+                cnt[g] = 0
+        out = pd.DataFrame({
+            "تفعيل ريد": cnt["red"],
+            "تفعيل يوز": cnt["use"],
+            "تفعيل نت": cnt["net"],
+        })
+        out["مجموع التفعيل"] = out["تفعيل ريد"] + out["تفعيل يوز"] + out["تفعيل نت"]
+        ru = qd[qd["group"].isin(["red", "use"])].groupby("key")["pts"].sum()
+        nt = qd[qd["group"] == "net"].groupby("key")["pts"].sum()
+        out["نقاط الاتصال (ريد ويوز)"] = ru
+        out["نقاط النت"] = nt
+        out = out[QMETRICS].fillna(0)
+    return out, ignored, gpts, gcnt
+
+
+def cmp_bundle_rows(bnd):
+    # same naming rules as the bundles sheet: known names are merged, unknown keep their own name
+    name_idx, hits = detect_bundle_col(bnd)
+    if name_idx is None:
+        return None
+    if bnd.shape[1] > BND_SUB_COL:
+        sub_vals = bnd.iloc[:, BND_SUB_COL].map(norm_name)
+    else:
+        sub_vals = ""
+    b = pd.DataFrame({
+        "key": bnd.iloc[:, BND_OFFICE_COL].apply(last10),
+        "name": bnd.iloc[:, name_idx].map(norm_name),
+        "sub": sub_vals,
+    })
+    b["label"] = [classify_bundle(n, s2) for n, s2 in zip(b["name"], b["sub"])]
+    raw = bnd.iloc[:, name_idx].map(
+        lambda x: "" if pd.isna(x) else re.sub(r"\s+", " ", str(x)).strip()
+    )
+    first_seen = {}
+    for nm_n, nm_raw in zip(b["name"], raw):
+        if nm_n and nm_n not in first_seen:
+            first_seen[nm_n] = nm_raw
+    unk = b["label"].isna() & (b["name"] != "")
+    b.loc[unk, "label"] = b.loc[unk, "name"].map(first_seen)
+    b = b.dropna(subset=["label", "key"])
+    b = b[b["label"] != SKIP_BUNDLE]
+    return b[["key", "label"]]
+
+
+def cmp_remaining(dist, live):
+    # remaining lines per office from the distribution report (same rules as the main tab):
+    # latest row per line, status distributed, known items only, minus lines found in live stock
+    d = pd.DataFrame({
+        "line": dist.iloc[:, 0].astype(str).str.strip(),
+        "item": dist.iloc[:, 2].astype(str).str.strip().str.lower(),
+        "status": dist.iloc[:, 4].astype(str).str.strip().str.lower(),
+        "key": dist.iloc[:, 5].apply(last10),
+        "date": pd.to_datetime(dist.iloc[:, 8], errors="coerce"),
+    })
+    d = d.sort_values("date", kind="stable").drop_duplicates(subset="line", keep="last")
+    d = d[d["status"] == "distributed"].copy()
+    d["cat"] = d["item"].map(item_map)
+    d = d.dropna(subset=["cat", "key"])
+    removed = 0
+    if live is not None:
+        live_set = set(live.iloc[:, 0].apply(last10).dropna())
+        in_live = d["line"].apply(last10).isin(live_set)
+        removed = int(in_live.sum())
+        d = d[~in_live]
+    cnt = pd.crosstab(d["key"], d["cat"])
+    for col in [RED, USE, USE_1M, DAILY, MONTHLY, BIG_ROUTER, SMALL_MIFI]:
+        if col not in cnt.columns:
+            cnt[col] = 0
+    red = cnt[RED]
+    use = cnt[USE] + cnt[USE_1M]
+    net = cnt[DAILY] + cnt[MONTHLY] + cnt[BIG_ROUTER] + cnt[SMALL_MIFI]
+    need = {k: cmp_need_text(red[k], use[k], net[k]) for k in cnt.index}
+    return need, removed
+
+
+def cmp_build(adf, prev_tbl, curr_tbl, metrics, int_metrics, status_metric, lp, lc, need=None):
+    keys = list(adf["key"])
+    seen = set(keys)
+    for k in list(prev_tbl.index) + list(curr_tbl.index):
+        if k not in seen:
+            seen.add(k)
+            keys.append(k)
+    a_set = set(adf["key"])
+    mask = pd.Series([k in a_set for k in keys])
+    out = pd.DataFrame({T["office_no"]: keys})
+    name_map = dict(zip(adf["key"], adf[T["office_name"]]))
+    rep_map = dict(zip(adf["key"], adf[T["rep"]]))
+    out.insert(0, T["office_name"], out[T["office_no"]].map(name_map).fillna(T["unmatched"]))
+    out.insert(2, T["rep"], out[T["office_no"]].map(rep_map).fillna(""))
+    p = prev_tbl.reindex(keys).fillna(0).reset_index(drop=True)
+    c = curr_tbl.reindex(keys).fillna(0).reset_index(drop=True)
+    pv_s, cv_s = p[status_metric], c[status_metric]
+    lev_p = cmp_levels(pv_s, mask)
+    lev_c = cmp_levels(cv_s, mask)
+    out[CMP_STATE] = [cmp_state(a, b, v) for a, b, v in zip(lev_p, lev_c, cv_s)]
+    out[CMP_TREND] = [cmp_status(a, b) for a, b in zip(pv_s, cv_s)]
+    out["المستوى (" + lp + ")"] = lev_p
+    out["المستوى (" + lc + ")"] = lev_c
+    for m in metrics:
+        pv = p[m].round(2)
+        cv = c[m].round(2)
+        dv = (c[m] - p[m]).round(2)
+        if m in int_metrics:
+            pv, cv, dv = pv.astype(int), cv.astype(int), dv.astype(int)
+        out[m + " (" + lp + ")"] = pv.values
+        out[m + " (" + lc + ")"] = cv.values
+        out[m + " - " + CMP_DIFF] = dv.values
+    if need is not None:
+        # last field: only when the distribution report was uploaded
+        out[CMP_NEED] = out[T["office_no"]].map(need).fillna(cmp_need_text(0, 0, 0))
+    out["_c"] = cv_s.values
+    out["_p"] = pv_s.values
+    out = out.sort_values(["_c", "_p"], ascending=False, kind="stable").drop(columns=["_c", "_p"])
+    out = out.reset_index(drop=True)
+    in_agents = out[T["office_no"]].isin(a_set)
+    unmatched = out[~in_agents].reset_index(drop=True)
+    main = out[in_agents].reset_index(drop=True)
+    return main, unmatched
+
+
+def cmp_reps(main, metric, lp, lc):
+    # per rep: total of his offices in both months + trend (up / down)
+    pcol = metric + " (" + lp + ")"
+    ccol = metric + " (" + lc + ")"
+    df = main[[T["rep"], pcol, ccol, CMP_STATE, CMP_TREND]].copy()
+    df[T["rep"]] = df[T["rep"]].astype(str).str.strip().replace({"": "بدون مندوب", "nan": "بدون مندوب"})
+    g = df.groupby(T["rep"])
+    out = pd.DataFrame({"عدد المكاتب": g.size(), pcol: g[pcol].sum(), ccol: g[ccol].sum()})
+    out[CMP_DIFF] = out[ccol] - out[pcol]
+    out["النسبة %"] = [round(d / p * 100, 1) if p > 0 else None for d, p in zip(out[CMP_DIFF], out[pcol])]
+    out[CMP_TREND] = [cmp_status(a, b) for a, b in zip(out[pcol], out[ccol])]
+    out["مكاتب متوقفة"] = g[CMP_TREND].apply(lambda s: int((s == "متوقف").sum()))
+    out["بحاجة كول سنتر"] = g[CMP_STATE].apply(lambda s: int((s == ST_CALL).sum()))
+    out = out.sort_values(ccol, ascending=False).reset_index().rename(columns={T["rep"]: "المندوب"})
+    return out
+
+
+def cmp_rating(score):
+    for lim, name in MGR_RATING:
+        if score >= lim:
+            return name
+    return MGR_RATING[-1][1]
+
+
+def cmp_manager(kind, main, metric, lp, lc, tot_prev, tot_curr, gpts_prev, gpts_curr, targets):
+    # sales manager performance: targets + results + growth + health of the offices
+    rows = []   # (name, prev, curr, change, standard, score, weight, note)
+    weights = MGR_WEIGHTS_Q if kind == "quality" else MGR_WEIGHTS_B
+    total_n = len(main)
+    pcol = metric + " (" + lp + ")"
+    ccol = metric + " (" + lc + ")"
+
+    def clamp(x):
+        return max(0.0, min(100.0, x))
+
+    def growth_score(prev, curr):
+        if prev <= 0:
+            return (100.0 if curr > 0 else 0.0), None
+        g = (curr - prev) / prev
+        return clamp(60 + 200 * g), g
+
+    if kind == "quality":
+        for key, label in [("net", "تاركت النقاط - نت"), ("red", "تاركت النقاط - ريد"), ("use", "تاركت النقاط - يوز")]:
+            tgt = float(targets.get(key, 0) or 0)
+            if tgt <= 0:
+                continue
+            cur = gpts_curr[key]
+            ach = cur / tgt
+            rows.append((label, round(gpts_prev[key], 2), round(cur, 2), round(cur - gpts_prev[key], 2),
+                         round(tgt, 2), round(clamp(ach * 100), 1), weights[key],
+                         "تحقق {:.0%} من الهدف".format(ach)))
+        sc, g = growth_score(tot_prev, tot_curr)
+        rows.append(("نمو إجمالي التفعيل", tot_prev, tot_curr, tot_curr - tot_prev, "ثبات = 60 ، +20% = 100",
+                     round(sc, 1), weights["act"], "" if g is None else "التغير {:+.0%}".format(g)))
+        sp, sc_c = sum(gpts_prev.values()), sum(gpts_curr.values())
+        sc, g = growth_score(sp, sc_c)
+        rows.append(("نمو إجمالي النقاط", round(sp, 2), round(sc_c, 2), round(sc_c - sp, 2), "ثبات = 60 ، +20% = 100",
+                     round(sc, 1), weights["pts"], "" if g is None else "التغير {:+.0%}".format(g)))
+    else:
+        sc, g = growth_score(tot_prev, tot_curr)
+        rows.append(("نمو إجمالي الباقات", tot_prev, tot_curr, tot_curr - tot_prev, "ثبات = 60 ، +20% = 100",
+                     round(sc, 1), weights["act"], "" if g is None else "التغير {:+.0%}".format(g)))
+
+    if total_n > 0:
+        act_p = int((main[pcol] > 0).sum())
+        act_c = int((main[ccol] > 0).sum())
+        rows.append(("نسبة المكاتب الفعّالة", "{:.0%}".format(act_p / total_n), "{:.0%}".format(act_c / total_n),
+                     "{:+.0%}".format((act_c - act_p) / total_n), "كل المكاتب",
+                     round(100.0 * act_c / total_n, 1), weights["active"],
+                     "{} من {} مكتب".format(act_c, total_n)))
+        bad = int(main[CMP_TREND].isin(["نازل", "متوقف"]).sum())
+        rows.append(("نسبة المكاتب اللي ما نزلت ولا توقفت", "", "{:.0%}".format(1 - bad / total_n), "",
+                     "كل المكاتب", round(100.0 * (1 - bad / total_n), 1), weights["keep"],
+                     "{} مكتب نازل أو متوقف".format(bad)))
+        cc = int((main[CMP_STATE] == ST_CALL).sum())
+        rows.append(("نسبة المكاتب بحاجة كول سنتر", "", "{:.0%}".format(cc / total_n), "",
+                     "كل ما قلّت أحسن", round(100.0 * (1 - cc / total_n), 1), weights["call"],
+                     "{} مكتب".format(cc)))
+
+    wsum = sum(r[6] for r in rows)
+    final = sum(r[5] * r[6] for r in rows) / wsum if wsum > 0 else 0.0
+    cols = ["البند", "السابق (" + lp + ")", "الحالي (" + lc + ")", "التغير", "الهدف / المعيار",
+            "الدرجة من 100", "الوزن %", "ملاحظة"]
+    df = pd.DataFrame(rows, columns=cols)
+    weak = sorted(rows, key=lambda r: r[5])[:2]
+    weak_txt = " ، ".join(r[0] for r in weak if r[5] < 60) or "لا توجد نقاط ضعف واضحة"
+    extra = [
+        ("الدرجة النهائية (من 100)", "", round(final, 1), "", "", "", "", ""),
+        ("تقييم مدير المبيعات", "", cmp_rating(final), "", "", "", "", ""),
+        ("أضعف المؤشرات", "", weak_txt, "", "", "", "", ""),
+        ("", "", "", "", "", "", "", ""),
+        ("توزيع المكاتب حسب الحالة", "", "", "", "", "", "", ""),
+    ]
+    for st_name, n in main[CMP_STATE].value_counts().items():
+        extra.append((st_name, "", int(n), "", "", "", "", "{:.0%} من المكاتب".format(n / total_n)))
+    df = pd.concat([df, pd.DataFrame(extra, columns=cols)], ignore_index=True)
+    return df, final
+
+
+def cmp_add_excel_chart(data, sheet, n_rows, title):
+    # native Excel bar chart (previous vs current) on the reps sheet
+    try:
+        import openpyxl
+        from openpyxl.chart import BarChart, Reference
+        wb = openpyxl.load_workbook(BytesIO(data))
+        ws = wb[sheet]
+        ch = BarChart()
+        ch.type = "col"
+        ch.title = title
+        ch.add_data(Reference(ws, min_col=3, max_col=4, min_row=1, max_row=n_rows + 1), titles_from_data=True)
+        ch.set_categories(Reference(ws, min_col=1, min_row=2, max_row=n_rows + 1))
+        ch.height = 11
+        ch.width = max(20, 2.2 * n_rows)
+        ws.add_chart(ch, "L2")
+        buf = BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+    except Exception:
+        return data
+
+
+def cmp_run(kind, agents, rep_prev, rep_curr, lp, lc, dist=None, live=None, targets=None):
+    # returns a dict; on a problem {"error": [messages]}
+    targets = targets or {}
+    adf = cmp_agents_df(agents)
+    msgs = []
+    need = None
+    if dist is not None:
+        need, removed = cmp_remaining(dist, live)
+        if live is not None:
+            msgs.append("خطوط انشالت لأنها بالايف ستوك: " + str(removed))
+        else:
+            msgs.append("ما رفعت الايف ستوك، فالخطوط الباقية = كل الخطوط الموزعة")
+    gp = gc = {"red": 0.0, "use": 0.0, "net": 0.0}
+    if kind == "quality":
+        p_tbl, ig1, gp, cnt_p = cmp_quality_summary(rep_prev)
+        c_tbl, ig2, gc, cnt_c = cmp_quality_summary(rep_curr)
+        if ig1 or ig2:
+            msgs.append("صفوف كوالتي متجاهلة (نوع غير معروف): " + str(ig1) + " / " + str(ig2))
+        metric = "مجموع التفعيل"
+        main, um = cmp_build(adf, p_tbl, c_tbl, QMETRICS, QMETRICS[:4], metric, lp, lc, need)
+        extras_tail = []
+    else:
+        bp = cmp_bundle_rows(rep_prev)
+        bc = cmp_bundle_rows(rep_curr)
+        if bp is None or bc is None:
+            return {"error": ["ما لقيت عمود اسم الباقة بأحد التقريرين"]}
+        p_tbl = bp.groupby("key").size().to_frame("عدد الباقات")
+        c_tbl = bc.groupby("key").size().to_frame("عدد الباقات")
+        metric = "عدد الباقات"
+        main, um = cmp_build(adf, p_tbl, c_tbl, [metric], [metric], metric, lp, lc, need)
+        # per bundle detail (long format, easy to filter in Excel)
+        pc = bp.groupby(["key", "label"]).size().rename("p")
+        cc = bc.groupby(["key", "label"]).size().rename("c")
+        det = pd.concat([pc, cc], axis=1).fillna(0).reset_index()
+        det = det[det["key"].isin(set(adf["key"]))]   # numbers not in agents are in the unmatched sheet
+        if len(det) > 0:
+            det["p"] = det["p"].astype(int)
+            det["c"] = det["c"].astype(int)
+            det["d"] = det["c"] - det["p"]
+            tot_c = det.groupby("key")["c"].transform("sum")
+            det = det.assign(_t=tot_c).sort_values(["_t", "key", "c"], ascending=[False, True, False])
+            det = det.drop(columns="_t")
+            name_map = dict(zip(adf["key"], adf[T["office_name"]]))
+            rep_map = dict(zip(adf["key"], adf[T["rep"]]))
+            det.insert(0, T["office_name"], det["key"].map(name_map).fillna(T["unmatched"]))
+            det.insert(2, T["rep"], det["key"].map(rep_map).fillna(""))
+            det = det.rename(columns={
+                "key": T["office_no"], "label": "الباقة",
+                "p": "العدد (" + lp + ")", "c": "العدد (" + lc + ")", "d": CMP_DIFF,
+            }).reset_index(drop=True)
+        else:
+            det = pd.DataFrame(columns=[T["office_name"], T["office_no"], T["rep"], "الباقة"])
+        extras_tail = [("تفصيل الباقات", det)]
+    all_keys = set(p_tbl.index) | set(c_tbl.index)
+    if len(all_keys) > 0 and len(all_keys & set(adf["key"])) == 0:
+        msgs.append("ما تطابق أي رقم مكتب بالتقارير مع عمود B بالوكلاء، تأكد من الملفات")
+    reps = cmp_reps(main, metric, lp, lc)
+    tot_p = float(p_tbl[metric].sum()) if len(p_tbl) else 0.0
+    tot_c = float(c_tbl[metric].sum()) if len(c_tbl) else 0.0
+    mgr, final = cmp_manager(kind, main, metric, lp, lc, int(tot_p), int(tot_c), gp, gc, targets)
+    extras = [("أداء مدير المبيعات", mgr), ("المندوبين", reps)] + extras_tail
+    if len(um) > 0:
+        extras.append((T["unmatched"], um))
+        msgs.append("مكاتب غير مطابقة اننقلت لشيت منفصل: " + str(len(um)))
+    return {"main": main, "extras": extras, "msgs": msgs, "reps": reps, "manager": mgr,
+            "final": final, "metric": metric}
+
+
+def cmp_show_rep_charts(reps, metric, lp, lc):
+    pcol = metric + " (" + lp + ")"
+    ccol = metric + " (" + lc + ")"
+    if len(reps) == 0:
+        return
+    st.write("رسم المندوبين: " + lp + " مقابل " + lc)
+    st.bar_chart(reps.set_index("المندوب")[[pcol, ccol]])
+    st.write("صعود ونزول كل مندوب (الفرق)")
+    d = reps[["المندوب", CMP_DIFF]].copy()
+    d["اتجاه"] = d[CMP_DIFF].map(lambda v: "صاعد" if v >= 0 else "نازل")
+    try:
+        import altair as alt
+        chart = alt.Chart(d).mark_bar().encode(
+            x=alt.X("المندوب:N", sort=None),
+            y=alt.Y(CMP_DIFF + ":Q"),
+            color=alt.Color("اتجاه:N", scale=alt.Scale(domain=["صاعد", "نازل"], range=["#2e7d32", "#c62828"])),
+            tooltip=["المندوب", CMP_DIFF, "اتجاه"],
+        )
+        st.altair_chart(chart, use_container_width=True)
+    except Exception:
+        st.bar_chart(d.set_index("المندوب")[CMP_DIFF])
+
+
+def compare_page():
+    st.title("مقارنة شهرين")
+    kind_lbl = st.radio("نوع التقرير", ["الكوالتي", "الباقات"], horizontal=True, key="cmp_kind")
+    kind = "quality" if kind_lbl == "الكوالتي" else "bundles"
+    l1, l2 = st.columns(2)
+    with l1:
+        lp = st.text_input("اسم الشهر السابق", value="الشهر السابق", key="cmp_lp")
+    with l2:
+        lc = st.text_input("اسم هذا الشهر", value="هذا الشهر", key="cmp_lc")
+    lp = lp.strip() or "الشهر السابق"
+    lc = lc.strip() or "هذا الشهر"
+    if lp == lc:
+        lc = lc + " 2"
+    f1, f2, f3 = st.columns(3)
+    with f1:
+        up_a = st.file_uploader("تقرير الوكلاء (إجباري)", key="cmp_agents")
+    with f2:
+        up_p = st.file_uploader("تقرير " + kind_lbl + " - " + lp, key="cmp_prev_" + kind)
+    with f3:
+        up_c = st.file_uploader("تقرير " + kind_lbl + " - " + lc, key="cmp_curr_" + kind)
+    g1, g2 = st.columns(2)
+    with g1:
+        up_d = st.file_uploader("تقرير التوزيع (اختياري، لحقل: يحتاج خط)", key="cmp_dist")
+    with g2:
+        up_l = st.file_uploader("الايف ستوك (اختياري، مع التوزيع)", key="cmp_live")
+    targets = {}
+    if kind == "quality":
+        saved = load_targets().get(target_month_key(), {})
+        with st.expander("التاركت الشهري (نقاط) لتقييم مدير المبيعات", expanded=True):
+            t1, t2, t3 = st.columns(3)
+            with t1:
+                targets["net"] = st.number_input("تاركت نت", min_value=0, value=int(saved.get("net", 0)), step=100, key="cmp_tn")
+            with t2:
+                targets["red"] = st.number_input("تاركت ريد", min_value=0, value=int(saved.get("red", 0)), step=100, key="cmp_tr")
+            with t3:
+                targets["use"] = st.number_input("تاركت يوز", min_value=0, value=int(saved.get("use", 0)), step=100, key="cmp_tu")
+    if up_a is None or up_p is None or up_c is None:
+        st.info("ارفع تقرير الوكلاء وتقريرين من نفس النوع (" + kind_lbl + ") حتى تبدأ المقارنة")
+        return
+    frames = []
+    loads = [(f1, up_a, "الوكلاء - مقارنة"), (f2, up_p, "السابق - مقارنة"), (f3, up_c, "الحالي - مقارنة")]
+    for col, up, lbl in loads:
+        with col:
+            sh = load_report(up, lbl)
+            frames.append(pick_sheet(sh, lbl) if sh is not None else None)
+    dist = live = None
+    if up_d is not None:
+        with g1:
+            sh = load_report(up_d, "التوزيع - مقارنة")
+            dist = pick_sheet(sh, "التوزيع - مقارنة") if sh is not None else None
+    if up_l is not None:
+        with g2:
+            sh = load_report(up_l, "الايف ستوك - مقارنة")
+            live = pick_sheet(sh, "الايف ستوك - مقارنة") if sh is not None else None
+    if any(fr is None for fr in frames):
+        return
+    agents, rep_prev, rep_curr = frames
+    n_rep = 4 if kind == "quality" else 1
+    need = [(agents, 3, "الوكلاء"), (rep_prev, n_rep, lp), (rep_curr, n_rep, lc)]
+    if dist is not None:
+        need.append((dist, 9, "التوزيع"))
+    for df, n, nm in need:
+        if df.shape[1] < n:
+            st.error("تقرير " + nm + ": عدد الأعمدة " + str(df.shape[1]) + " والمطلوب على الأقل " + str(n))
+            return
+    if st.button("قارن", key="cmp_go"):
+        try:
+            res = cmp_run(kind, agents, rep_prev, rep_curr, lp, lc, dist, live, targets)
+        except Exception:
+            st.error("حدث خطأ")
+            st.code(traceback.format_exc())
+            return
+        if "error" in res:
+            for m in res["error"]:
+                st.error(m)
+            return
+        main, extras, metric = res["main"], res["extras"], res["metric"]
+        st.success("تمت المقارنة. عدد المكاتب: " + str(len(main)))
+        for m in res["msgs"]:
+            st.info(m)
+        counts = main[CMP_STATE].value_counts()
+        st.info(" | ".join(k + ": " + str(int(v)) for k, v in counts.items()))
+        show_table(main)
+        cmp_show_rep_charts(res["reps"], metric, lp, lc)
+        st.write("أداء مدير المبيعات: " + cmp_rating(res["final"]) + " ({:.1f} من 100)".format(res["final"]))
+        show_table(res["manager"])
+        for name, df in extras:
+            if name == "تفصيل الباقات":
+                st.write(name)
+                st.dataframe(df, use_container_width=True)
+        data = format_excel(main, extras)
+        data = cmp_add_excel_chart(data, "المندوبين", len(res["reps"]), "المندوبين: " + lp + " مقابل " + lc)
+        st.download_button(
+            T["download"], data=data,
+            file_name="comparison_" + kind + ".xlsx", mime=XLSX_MIME, key="cmp_dl",
+        )
+
+
+def main_page():
+    st.title(T["title"])
+
+    c1, c2, c3 = st.columns(3)
+    c4, c5, c6 = st.columns(3)
+    c7, c8, c9 = st.columns(3)
+    with c1:
+        agents_file = st.file_uploader(T["up_agents"], key="agents")
+    with c2:
+        dist_file = st.file_uploader(T["up_dist"], key="dist")
+    with c3:
+        quality_file = st.file_uploader(T["up_quality"], key="quality")
+    with c4:
+        inc_file = st.file_uploader(T["up_inc"], key="inc")
+    with c5:
+        wal_file = st.file_uploader(T["up_wal"], key="wal")
+    with c6:
+        bnd_file = st.file_uploader(T["up_bnd"], key="bnd")
+    with c7:
+        live_file = st.file_uploader(T["up_live"], key="live")
+
+    mk = target_month_key()
+    saved_t = load_targets().get(mk, {})
+    with st.expander(T["tgt_title"] + " - " + mk, expanded=True):
+        t1, t2, t3 = st.columns(3)
+        with t1:
+            tgt_net = st.number_input(T["tgt_net"], min_value=0, value=int(saved_t.get("net", 0)), step=100, key="tgt_net_" + mk)
+        with t2:
+            tgt_red = st.number_input(T["tgt_red"], min_value=0, value=int(saved_t.get("red", 0)), step=100, key="tgt_red_" + mk)
+        with t3:
+            tgt_use = st.number_input(T["tgt_use"], min_value=0, value=int(saved_t.get("use", 0)), step=100, key="tgt_use_" + mk)
+
+    if agents_file is None:
+        st.info(T["q_required"])
+    else:
+        agents = None
+        dist = None
+        q = None
+        inc = None
+        wal = None
+        bnd = None
+        live = None
+
+        if agents_file is not None:
+            with c1:
+                sh = load_report(agents_file, T["agents"])
+                if sh is not None:
+                    agents = pick_sheet(sh, T["agents"])
+        if dist_file is not None:
+            with c2:
+                sh = load_report(dist_file, T["dist"])
+                if sh is not None:
+                    dist = pick_sheet(sh, T["dist"])
+        if quality_file is not None:
+            with c3:
+                sh = load_report(quality_file, T["quality"])
+                if sh is not None:
+                    q = pick_sheet(sh, T["quality"])
+        if inc_file is not None:
+            with c4:
+                sh = load_report(inc_file, T["inc"])
+                if sh is not None:
+                    inc = pick_sheet(sh, T["inc"])
+        if wal_file is not None:
+            with c5:
+                sh = load_report(wal_file, T["wal"])
+                if sh is not None:
+                    wal = pick_sheet(sh, T["wal"])
+        if bnd_file is not None:
+            with c6:
+                sh = load_report(bnd_file, T["bnd"])
+                if sh is not None:
+                    bnd = pick_sheet(sh, T["bnd"])
+        if live_file is not None:
+            with c7:
+                sh = load_report(live_file, T["live"])
+                if sh is not None:
+                    live = pick_sheet(sh, T["live"])
+
+        if agents is not None:
+            with st.expander(T["preview"]):
+                if agents is not None:
+                    st.write(T["agents"])
+                    st.dataframe(agents.head(5))
+                if dist is not None:
+                    st.write(T["dist"])
+                    st.dataframe(dist.head(5))
+                if q is not None:
+                    st.write(T["quality"])
+                    st.dataframe(q.head(5))
+                if inc is not None:
+                    st.write(T["inc"])
+                    st.dataframe(inc.head(5))
+                if wal is not None:
+                    st.write(T["wal"])
+                    st.dataframe(wal.head(5))
+                if bnd is not None:
+                    st.write(T["bnd"])
+                    st.dataframe(bnd.head(5))
+                if live is not None:
+                    st.write(T["live"])
+                    st.dataframe(live.head(5))
+
+            if st.button(T["calc"]):
+                save_ok = save_targets(mk, tgt_net, tgt_red, tgt_use)
+                if not save_ok:
+                    st.caption(T["tgt_nosave"])
+                try:
+                    result = compute(agents, dist, q, inc, wal, bnd, live)
+                    if result is not None:
+                        show_table(result)
+                        bundle_df = result.attrs.get("bundles")
+                        mm_df = result.attrs.get("mismatch")
+                        extras = []
+                        after_points = []
+                        if bundle_df is not None:
+                            st.write(T["bnd"])
+                            if len(bundle_df) > 0:
+                                show_table(bundle_df)
+                            else:
+                                st.info(T["bnd_empty"])
+                            extras.append((T["bnd"], bundle_df))
+                        if mm_df is not None and len(mm_df) > 0:
+                            st.write(T["mm_title"])
+                            show_table(mm_df)
+                            extras.append((T["mm_sheet"], mm_df))
+                        monthly_df = result.attrs.get("monthly")
+                        if monthly_df is not None:
+                            m_name = T["monthly_sheet"] + " " + str(result.attrs.get("monthly_month"))
+                            st.write(m_name)
+                            show_table(monthly_df)
+                            after_points = [(m_name, monthly_df)]
+                            if result.attrs.get("monthly_msg"):
+                                st.info(result.attrs.get("monthly_msg"))
+                        um_df = result.attrs.get("unmatched")
+                        if um_df is not None and len(um_df) > 0:
+                            st.write(T["um_title"])
+                            show_table(um_df)
+                            after_points.append((T["unmatched"], um_df))
+                        points_info = None
+                        points_src = result.attrs.get("points_src")
+                        if points_src is not None:
+                            points_info = build_points_table(points_src, tgt_net, tgt_red, tgt_use)
+                        if points_info is not None:
+                            st.write(T["pts_sheet"])
+                            st.dataframe(points_info["display"], use_container_width=True)
+                        xlsx_bytes = format_excel(result, extras, points_info, after_points)
+                        st.download_button(
+                            T["download"],
+                            data=xlsx_bytes,
+                            file_name=report_file_name(),
+                            mime=XLSX_MIME,
+                        )
+                except Exception:
+                    st.error(T["err"])
+                    st.code(traceback.format_exc())
+
+
+tab_main, tab_cmp = st.tabs(["التقرير الرئيسي", "مقارنة شهرين"])
+with tab_main:
+    main_page()
+with tab_cmp:
+    compare_page()
