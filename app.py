@@ -2092,6 +2092,450 @@ def compare_page():
         )
 
 
+# ===== tabs "عشوائيات" (alerts, call-center list, dashboard, per-rep reports, helpers) and "كيبي اي" =====
+# both read the result of the first tab (kept in st.session_state["last_result"] after "احسب")
+import zipfile
+
+try:
+    KPI_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kpi_targets.json")
+except NameError:
+    KPI_FILE = "kpi_targets.json"
+
+STUCK_STOCK = 10   # lines left with an office that has no activation = stuck lines
+
+
+def load_kpi():
+    try:
+        with open(KPI_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_kpi(month_key, wal, inc):
+    data = load_kpi()
+    data[month_key] = {"wal": int(wal), "inc": int(inc)}
+    for k in sorted(data.keys())[:-12]:
+        del data[k]
+    try:
+        with open(KPI_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        return True
+    except Exception:
+        return False
+
+
+def col_like(df, base):
+    for c in df.columns:
+        if c == base or str(c).startswith(base + " "):
+            return c
+    return None
+
+
+def num_col(res, base):
+    c = col_like(res, base)
+    if c is None:
+        return None
+    return pd.to_numeric(res[c], errors="coerce").fillna(0).reset_index(drop=True)
+
+
+def clean_rep(s):
+    return s.astype(str).str.strip().replace({"": "بدون مندوب", "nan": "بدون مندوب"})
+
+
+def remaining_cols(res):
+    # remaining lines per office from the first sheet: red / use / net (None = column not there)
+    def total(names):
+        tot = None
+        for nm in names:
+            c = T["remain"] + " " + nm
+            if c in res.columns:
+                v = pd.to_numeric(res[c], errors="coerce").fillna(0).reset_index(drop=True)
+                tot = v if tot is None else tot + v
+        return tot
+    return total([RED]), total([USE, USE_1M]), total([DAILY, MONTHLY, BIG_ROUTER, SMALL_MIFI])
+
+
+def need_text_low(red, use, net, low):
+    missing = []
+    if red <= low:
+        missing.append("ريد")
+    if use <= low:
+        missing.append("يوز")
+    if net <= low:
+        missing.append("نت")
+    if not missing:
+        return ""
+    txt = missing[0]
+    for m in missing[1:]:
+        txt += " و" + m
+    return "بحاجة خط " + txt
+
+
+def alerts_frame(res, low):
+    # one row per office with the reasons; also the call-center list and the lines-needed list
+    n = len(res)
+    zero = pd.Series([0] * n)
+    d = pd.DataFrame({
+        T["office_name"]: res[T["office_name"]].values,
+        T["office_no"]: res[T["office_no"]].values,
+        T["rep"]: (clean_rep(res[T["rep"]]).values if T["rep"] in res.columns else ["بدون مندوب"] * n),
+    })
+    ar, au, an = num_col(res, T["act_red"]), num_col(res, T["act_use"]), num_col(res, T["act_net"])
+    has_q = ar is not None and au is not None and an is not None
+    if has_q:
+        d["مجموع التفعيل"] = (ar + au + an).values
+        dr, dn = num_col(res, T["last_ru"]), num_col(res, T["last_net"])
+        last = (dr if dr is not None else zero) + (dn if dn is not None else zero)
+        d["تفعيل آخر يوم"] = last.values
+        pr, pn = num_col(res, T["pts_ru"]), num_col(res, T["pts_net"])
+        d["النقاط"] = ((pr if pr is not None else zero) + (pn if pn is not None else zero)).round(2).values
+        d["المستوى"] = cmp_levels(d["مجموع التفعيل"], pd.Series([True] * n))
+    rd, us, nw = remaining_cols(res)
+    has_stock = rd is not None or us is not None or nw is not None
+    if has_stock:
+        d["باقي ريد"] = (rd if rd is not None else zero).astype(int).values
+        d["باقي يوز"] = (us if us is not None else zero).astype(int).values
+        d["باقي نت"] = (nw if nw is not None else zero).astype(int).values
+    call_r, info_r, need_r, prio = [], [], [], []
+    for i in range(n):
+        rc, ri = [], []
+        tot = d["مجموع التفعيل"].iat[i] if has_q else None
+        if has_q:
+            if tot == 0:
+                rc.append("لا تفعيل هذا الشهر")
+            else:
+                if d["المستوى"].iat[i] == LVL_WEAK:
+                    rc.append("ضعيف التفعيل")
+                if d["تفعيل آخر يوم"].iat[i] == 0:
+                    ri.append("ما فعّل بآخر يوم")
+        need = ""
+        if has_stock:
+            a, b, c = d["باقي ريد"].iat[i], d["باقي يوز"].iat[i], d["باقي نت"].iat[i]
+            need = need_text_low(a, b, c, low)
+            if tot == 0 and (a + b) >= STUCK_STOCK:
+                rc.append("خطوط واقفة ({})".format(int(a + b)))
+        call_r.append(" + ".join(rc))
+        info_r.append(" + ".join(ri))
+        need_r.append(need)
+        if any(x == "لا تفعيل هذا الشهر" or x.startswith("خطوط واقفة") for x in rc):
+            prio.append("عالي")
+        elif rc:
+            prio.append("متوسط")
+        else:
+            prio.append("")
+    d["سبب الاتصال"] = call_r
+    d["ملاحظات"] = info_r
+    d["بحاجة خط"] = need_r
+    d["الأولوية"] = prio
+    base = [T["office_name"], T["office_no"], T["rep"]]
+    call_cols = base + (["مجموع التفعيل", "تفعيل آخر يوم", "النقاط"] if has_q else []) + ["سبب الاتصال", "الأولوية"]
+    call_df = d[d["سبب الاتصال"] != ""][call_cols].copy()
+    rank = {"عالي": 0, "متوسط": 1}
+    call_df["_r"] = call_df["الأولوية"].map(rank)
+    sort_cols = ["_r"] + (["مجموع التفعيل"] if has_q else [])
+    call_df = call_df.sort_values(sort_cols, kind="stable").drop(columns="_r").reset_index(drop=True)
+    need_cols = base + (["باقي ريد", "باقي يوز", "باقي نت"] if has_stock else []) + ["بحاجة خط"]
+    need_df = d[d["بحاجة خط"] != ""][need_cols].reset_index(drop=True)
+    return d, call_df, need_df, has_q, has_stock
+
+
+def kpi_row(label, tgt, ach, elapsed, total_days, forecast):
+    cols = ["المؤشر", "التاركت", "المحقق", "النسبة %", "المتبقي", "التوقع نهاية الشهر",
+            "نسبة التوقع %", "المطلوب يومياً", "الحالة"]
+    row = {c: None for c in cols}
+    row["المؤشر"] = label
+    row["التاركت"] = tgt
+    if ach is None:
+        row["الحالة"] = "ما انرفع التقرير"
+        return row
+    row["المحقق"] = round(ach, 2)
+    if tgt <= 0:
+        row["الحالة"] = "لم يُحدد التاركت"
+        return row
+    pct = ach / tgt * 100
+    remaining = max(0.0, tgt - ach)
+    row["النسبة %"] = round(pct, 1)
+    row["المتبقي"] = round(remaining, 2)
+    if forecast and elapsed and total_days:
+        fc = ach / elapsed * total_days
+        fpct = fc / tgt * 100
+        left = total_days - elapsed
+        row["التوقع نهاية الشهر"] = round(fc, 2)
+        row["نسبة التوقع %"] = round(fpct, 1)
+        row["المطلوب يومياً"] = round(remaining / left, 2) if left > 0 else None
+        if pct >= 100:
+            row["الحالة"] = "محقق"
+        elif fpct >= 100:
+            row["الحالة"] = "على المسار"
+        elif fpct >= 80:
+            row["الحالة"] = "قريب"
+        else:
+            row["الحالة"] = "متأخر"
+    else:
+        row["الحالة"] = "محقق" if pct >= 100 else "غير محقق"
+    return row
+
+
+def kpi_table(res, tg):
+    # achieved numbers come from the first sheet (points from the quality rows, wallet/incentive = "done" offices)
+    src = res.attrs.get("points_src")
+    ach = {"net": 0.0, "red": 0.0, "use": 0.0}
+    elapsed = total_days = None
+    has_pts = src is not None and len(src) > 0
+    if has_pts:
+        s2 = src.copy()
+        s2["pts"] = s2["pts"].fillna(0)
+        for g in ach:
+            ach[g] = float(s2.loc[s2["group"] == g, "pts"].sum())
+        dated = s2.dropna(subset=["date"])
+        if len(dated) > 0:
+            last = dated["date"].max()
+            elapsed = int(last.day)
+            total_days = calendar.monthrange(last.year, last.month)[1]
+    rows = []
+    for key, label in [("net", "تاركت نت (نقاط)"), ("red", "تاركت ريد (نقاط)"), ("use", "تاركت يوز (نقاط)")]:
+        rows.append(kpi_row(label, float(tg.get(key, 0) or 0), ach[key] if has_pts else None,
+                            elapsed, total_days, True))
+    wal_done = int((res[T["wal"]] == "done").sum()) if T["wal"] in res.columns else None
+    inc_done = int((res[T["inc"]] == "done").sum()) if T["inc"] in res.columns else None
+    rows.append(kpi_row("تاركت المحفظة (عدد المكاتب)", float(tg.get("wal", 0) or 0), wal_done, None, None, False))
+    rows.append(kpi_row("تاركت الحافز (عدد المكاتب)", float(tg.get("inc", 0) or 0), inc_done, None, None, False))
+    return pd.DataFrame(rows), elapsed, total_days
+
+
+def saved_targets_all():
+    mk = target_month_key()
+    tg = dict(load_targets().get(mk, {}))
+    tg.update(load_kpi().get(mk, {}))
+    return tg
+
+
+def safe_file_name(s):
+    return re.sub(r'[\\/:*?"<>|]', "_", str(s)).strip() or "rep"
+
+
+def build_all_zip(res, call_df, need_df):
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        main_x = st.session_state.get("last_xlsx")
+        if main_x:
+            z.writestr(report_file_name(), main_x)
+        z.writestr("call_center.xlsx", format_excel(call_df))
+        z.writestr("need_lines.xlsx", format_excel(need_df))
+        kt, _, _ = kpi_table(res, saved_targets_all())
+        z.writestr("kpi.xlsx", format_excel(kt))
+        reps = clean_rep(res[T["rep"]]) if T["rep"] in res.columns else pd.Series(["بدون مندوب"] * len(res))
+        for i, rep in enumerate(sorted(set(reps)), start=1):
+            sub = res[(reps == rep).values]
+            z.writestr("reps/{:02d}_{}.xlsx".format(i, safe_file_name(rep)), format_excel(sub))
+    return buf.getvalue()
+
+
+def guess_report_type(df):
+    n, c = len(df), df.shape[1]
+    if n == 0 or c == 0:
+        return "فارغ", ""
+
+    def frac(series, test):
+        s = series.dropna().astype(str)
+        return float(s.map(test).mean()) if len(s) else 0.0
+
+    def phone(v):
+        return len(re.sub(r"\D", "", v)) >= 9
+
+    def number(v):
+        try:
+            float(v.replace(",", ""))
+            return True
+        except Exception:
+            return False
+
+    if c >= 4 and frac(df.iloc[:, 1], lambda v: clean_code(v) in QUALITY_TYPE) >= 0.5:
+        return "كوالتي", T["up_quality"]
+    if c >= 9 and frac(df.iloc[:, 4], lambda v: v.strip().lower() in ("distributed", "activated", "active")) >= 0.3:
+        return "توزيع", T["up_dist"]
+    idx, hits = detect_bundle_col(df)
+    if idx is not None and hits >= 1:
+        return "باقات", T["up_bnd"]
+    if c >= 8 and frac(df.iloc[:, 0], phone) >= 0.7 and frac(df.iloc[:, 7], number) >= 0.7:
+        return "حافز", T["up_inc"]
+    if c >= 6 and frac(df.iloc[:, 3], phone) >= 0.7 and frac(df.iloc[:, 5], number) >= 0.7:
+        return "محافظ", T["up_wal"]
+    if c >= 3 and frac(df.iloc[:, 1], phone) >= 0.7:
+        return "وكلاء", T["up_agents"]
+    if c <= 3 and frac(df.iloc[:, 0], phone) >= 0.7:
+        return "ايف ستوك", T["up_live"]
+    return "غير معروف", ""
+
+
+def files_checker():
+    st.subheader("فحص الملفات (تسهيل)")
+    st.caption("ارفعي كل الملفات هنا مرة وحدة، والأداة تخمّن نوع كل ملف وتقول بأي خانة يروح (تخمين، مو ملزم)")
+    files = st.file_uploader("ملفات للفحص", accept_multiple_files=True, key="chk_files")
+    if not files:
+        return
+    rows = []
+    for f in files:
+        sheets = load_report(f, "فحص")
+        if sheets is None:
+            rows.append({"الملف": f.name, "النوع المتوقع": "ما انقرا", "الخانة": "", "الصفوف": "", "الأعمدة": "", "الشيتات": ""})
+            continue
+        first = list(sheets.values())[0]
+        kind, slot = guess_report_type(first)
+        note = ""
+        if kind == "توزيع" and first.shape[1] < 9:
+            note = "أعمدته أقل من 9"
+        rows.append({"الملف": f.name, "النوع المتوقع": kind, "الخانة": slot, "الصفوف": len(first),
+                     "الأعمدة": first.shape[1], "الشيتات": len(sheets), "ملاحظة": note})
+    st.dataframe(pd.DataFrame(rows), use_container_width=True)
+
+
+def random_page():
+    st.title("عشوائيات")
+    res = st.session_state.get("last_result")
+    if res is None:
+        st.info("احسبي بالتبويب الأول (الرئيسي) أولاً، وبعدها تطلع هنا التنبيهات واللوحة والقوائم")
+        files_checker()
+        return
+    low = st.number_input("نبّه إذا الباقي من الخط أقل أو يساوي", min_value=0, value=2, step=1, key="rnd_low")
+    d, call_df, need_df, has_q, has_stock = alerts_frame(res, low)
+
+    st.subheader("لوحة المؤشرات")
+    n = len(d)
+    cards = st.columns(6)
+    with cards[0]:
+        st.metric("عدد المكاتب", n)
+    if has_q:
+        with cards[1]:
+            st.metric("مكاتب فعّالة", int((d["مجموع التفعيل"] > 0).sum()))
+        with cards[2]:
+            st.metric("مجموع التفعيل", int(d["مجموع التفعيل"].sum()))
+        with cards[3]:
+            st.metric("مجموع النقاط", round(float(d["النقاط"].sum()), 1))
+    with cards[4]:
+        st.metric("بحاجة كول سنتر", len(call_df))
+    with cards[5]:
+        st.metric("بحاجة خطوط", len(need_df))
+    src = res.attrs.get("points_src")
+    if src is not None and len(src) > 0:
+        s2 = src.dropna(subset=["date"]).copy()
+        if len(s2) > 0:
+            s2["day"] = s2["date"].dt.normalize()
+            last = s2["day"].max()
+            s2 = s2[(s2["day"].dt.year == last.year) & (s2["day"].dt.month == last.month)]
+            daily = s2.groupby(["day", "group"]).size().unstack(fill_value=0)
+            daily = daily.rename(columns={"red": "ريد", "use": "يوز", "net": "نت"})
+            st.write("التفعيل اليومي")
+            st.line_chart(daily)
+    if has_q:
+        t1, t2 = st.columns(2)
+        show_cols = [T["office_name"], T["rep"], "مجموع التفعيل", "النقاط"]
+        with t1:
+            st.write("أفضل 10 مكاتب")
+            st.dataframe(d.sort_values("مجموع التفعيل", ascending=False)[show_cols].head(10), use_container_width=True)
+        with t2:
+            st.write("أضعف 10 مكاتب (فيها تفعيل)")
+            act = d[d["مجموع التفعيل"] > 0]
+            st.dataframe(act.sort_values("مجموع التفعيل")[show_cols].head(10), use_container_width=True)
+
+    st.subheader("التنبيهات")
+    a = st.columns(5)
+    if has_q:
+        with a[0]:
+            st.metric("بدون تفعيل هذا الشهر", int((d["مجموع التفعيل"] == 0).sum()))
+        with a[1]:
+            st.metric("ما فعّل بآخر يوم", int((d["تفعيل آخر يوم"] == 0).sum()))
+        with a[2]:
+            st.metric("ضعيف التفعيل", int((d["المستوى"] == LVL_WEAK).sum()))
+    with a[3]:
+        st.metric("خطوط واقفة", int(d["سبب الاتصال"].str.contains("خطوط واقفة").sum()))
+    with a[4]:
+        st.metric("بحاجة خطوط", len(need_df))
+    if not has_q:
+        st.warning("ما رفعتي الكوالتي بالتبويب الأول، فتنبيهات التفعيل مو متاحة")
+    if not has_stock:
+        st.warning("ما رفعتي التوزيع بالتبويب الأول، فتنبيهات الخطوط مو متاحة")
+
+    st.subheader("قائمة الكول سنتر")
+    if len(call_df) == 0:
+        st.info("ما أكو مكاتب تحتاج كول سنتر")
+    else:
+        show_table(call_df)
+    st.download_button("تحميل قائمة الكول سنتر (إكسل)", data=format_excel(call_df),
+                       file_name="call_center.xlsx", mime=XLSX_MIME, key="dl_call")
+
+    st.subheader("مكاتب بحاجة خطوط")
+    if len(need_df) == 0:
+        st.info("كل المكاتب عندها خطوط كافية")
+    else:
+        show_table(need_df)
+    st.download_button("تحميل قائمة الخطوط (إكسل)", data=format_excel(need_df),
+                       file_name="need_lines.xlsx", mime=XLSX_MIME, key="dl_need")
+
+    st.subheader("تقرير جاهز لكل مندوب")
+    reps = clean_rep(res[T["rep"]]) if T["rep"] in res.columns else pd.Series(["بدون مندوب"] * len(res))
+    rep_names = sorted(set(reps))
+    sel = st.selectbox("المندوب", rep_names, key="rnd_rep")
+    sub = res[(reps == sel).values]
+    st.write("عدد مكاتبه: " + str(len(sub)))
+    show_table(sub)
+    st.download_button("تحميل تقرير المندوب (إكسل)", data=format_excel(sub),
+                       file_name="rep_" + safe_file_name(sel) + ".xlsx", mime=XLSX_MIME, key="dl_rep")
+
+    st.subheader("تحميل الكل بزر واحد")
+    st.caption("ملف ZIP فيه: الإكسل الرئيسي + الكول سنتر + الخطوط + الكيبي اي + ملف لكل مندوب")
+    if st.button("جهّزي ملف الكل", key="rnd_zip"):
+        st.download_button("تحميل الكل (ZIP)", data=build_all_zip(res, call_df, need_df),
+                           file_name="all_reports.zip", mime="application/zip", key="dl_zip")
+
+    files_checker()
+
+
+def kpi_page():
+    st.title("كيبي اي")
+    res = st.session_state.get("last_result")
+    if res is None:
+        st.info("احسبي بالتبويب الأول (الرئيسي) أولاً، وبعدها تطلع هنا النسب والتوقع")
+        return
+    mk = target_month_key()
+    saved = saved_targets_all()
+    with st.expander("التاركت الشهري - " + mk, expanded=True):
+        k1, k2, k3, k4, k5 = st.columns(5)
+        with k1:
+            t_net = st.number_input("تاركت نت (نقاط)", min_value=0, value=int(saved.get("net", 0)), step=100, key="kpi_net_" + mk)
+        with k2:
+            t_red = st.number_input("تاركت ريد (نقاط)", min_value=0, value=int(saved.get("red", 0)), step=100, key="kpi_red_" + mk)
+        with k3:
+            t_use = st.number_input("تاركت يوز (نقاط)", min_value=0, value=int(saved.get("use", 0)), step=100, key="kpi_use_" + mk)
+        with k4:
+            t_wal = st.number_input("تاركت المحفظة (عدد مكاتب)", min_value=0, value=int(saved.get("wal", 0)), step=1, key="kpi_wal_" + mk)
+        with k5:
+            t_inc = st.number_input("تاركت الحافز (عدد مكاتب)", min_value=0, value=int(saved.get("inc", 0)), step=1, key="kpi_inc_" + mk)
+        if st.button("حفظ التاركت", key="kpi_save"):
+            ok1 = save_targets(mk, t_net, t_red, t_use)
+            ok2 = save_kpi(mk, t_wal, t_inc)
+            st.success("انحفظ") if (ok1 and ok2) else st.warning("ما كدرت أحفظ على السيرفر، يبقى للجلسة الحالية بس")
+    tg = {"net": t_net, "red": t_red, "use": t_use, "wal": t_wal, "inc": t_inc}
+    kt, elapsed, total_days = kpi_table(res, tg)
+    cards = st.columns(5)
+    for col, (_, r) in zip(cards, kt.iterrows()):
+        with col:
+            pct = r["النسبة %"]
+            ach = r["المحقق"]
+            val = "-" if pct is None or pd.isna(pct) else "{:.0f}%".format(pct)
+            sub = "" if ach is None or pd.isna(ach) else "{:,.0f} من {:,.0f}".format(ach, r["التاركت"])
+            st.metric(r["المؤشر"], val, sub, delta_color="off")
+    show_table(kt)
+    pct_df = kt.dropna(subset=["النسبة %"]).set_index("المؤشر")[["النسبة %"]]
+    if len(pct_df) > 0:
+        st.bar_chart(pct_df)
+    if elapsed and total_days:
+        st.caption("التوقع = المحقق ÷ الأيام اللي مضت ({}) × أيام الشهر ({}). الأيام من آخر تاريخ بتقرير الكوالتي، والنقاط من الشيت الأول".format(elapsed, total_days))
+    st.download_button("تحميل الكيبي اي (إكسل)", data=format_excel(kt), file_name="kpi.xlsx",
+                       mime=XLSX_MIME, key="dl_kpi")
+
+
 def main_page():
     st.title(T["title"])
 
@@ -2202,6 +2646,7 @@ def main_page():
                 try:
                     result = compute(agents, dist, q, inc, wal, bnd, live)
                     if result is not None:
+                        st.session_state["last_result"] = result
                         show_table(result)
                         bundle_df = result.attrs.get("bundles")
                         mm_df = result.attrs.get("mismatch")
@@ -2239,6 +2684,7 @@ def main_page():
                             st.write(T["pts_sheet"])
                             st.dataframe(points_info["display"], use_container_width=True)
                         xlsx_bytes = format_excel(result, extras, points_info, after_points)
+                        st.session_state["last_xlsx"] = xlsx_bytes
                         st.download_button(
                             T["download"],
                             data=xlsx_bytes,
@@ -2250,8 +2696,12 @@ def main_page():
                     st.code(traceback.format_exc())
 
 
-tab_main, tab_cmp = st.tabs(["التقرير الرئيسي", "مقارنة شهرين"])
+tab_main, tab_cmp, tab_rnd, tab_kpi = st.tabs(["التقرير الرئيسي", "مقارنة شهرين", "عشوائيات", "كيبي اي"])
 with tab_main:
     main_page()
 with tab_cmp:
     compare_page()
+with tab_rnd:
+    random_page()
+with tab_kpi:
+    kpi_page()
