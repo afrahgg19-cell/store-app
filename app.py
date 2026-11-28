@@ -2364,8 +2364,7 @@ def rep_perf(d, tg):
 
 
 def mini_report(res):
-    # small report: total prep (red+use) and net package prep from the monthly distribution sheet,
-    # total activation, remaining lines = prep - activation, plus wallet and incentive
+    # small report: remaining lines come from the first sheet; total prep = remaining + total activation
     n = len(res)
     zero = pd.Series([0] * n)
     out = pd.DataFrame({
@@ -2373,32 +2372,29 @@ def mini_report(res):
         T["office_no"]: res[T["office_no"]].values,
         T["rep"]: (clean_rep(res[T["rep"]]).values if T["rep"] in res.columns else ["بدون مندوب"] * n),
     })
-    prep_call = zero.copy()
-    prep_net = zero.copy()
-    m = res.attrs.get("monthly")
-    if m is not None and len(m) > 0:
-        mm = m.set_index(T["office_no"])
-        keys = res[T["office_no"]].values
-        def pick(cols):
-            tot = pd.Series([0] * n)
-            for c in cols:
-                if c in mm.columns:
-                    tot = tot + pd.Series([mm[c].get(k, 0) for k in keys]).fillna(0)
-            return tot
-        prep_call = pick([RED, USE])
-        prep_net = pick([DAILY])
+
+    def rem(names):
+        tot = zero.copy()
+        for nm in names:
+            c = T["remain"] + " " + nm
+            if c in res.columns:
+                tot = tot + pd.to_numeric(res[c], errors="coerce").fillna(0).reset_index(drop=True)
+        return tot
+
+    rem_call = rem([RED, USE])
+    rem_net = rem([DAILY])
     ar, au, an = num_col(res, T["act_red"]), num_col(res, T["act_use"]), num_col(res, T["act_net"])
     act_call = (ar if ar is not None else zero) + (au if au is not None else zero)
     act_net = an if an is not None else zero
-    out["التجهيز الكلي (يوز + ريد)"] = prep_call.astype(int).values
-    out["تجهيز النت (البكج)"] = prep_net.astype(int).values
+    out["التجهيز الكلي (يوز + ريد)"] = (rem_call + act_call).astype(int).values
+    out["تجهيز النت (البكج)"] = (rem_net + act_net).astype(int).values
     out["تفعيل كلي اتصال"] = act_call.astype(int).values
     out["تفعيل كلي نت"] = act_net.astype(int).values
-    out["باقي خط اتصال"] = (prep_call - act_call).astype(int).values
-    out["باقي خط نت"] = (prep_net - act_net).astype(int).values
+    out["باقي خط اتصال"] = rem_call.astype(int).values
+    out["باقي خط نت"] = rem_net.astype(int).values
     out[T["wal"]] = res[T["wal"]].values if T["wal"] in res.columns else [""] * n
     out[T["inc"]] = res[T["inc"]].values if T["inc"] in res.columns else [""] * n
-    return out, (m is not None and len(m) > 0)
+    return out, True
 
 
 def random_page():
@@ -2553,10 +2549,8 @@ def kpi_page():
                        mime=XLSX_MIME, key="dl_kpi")
 
     st.subheader("التقرير المصغّر")
-    st.caption("التجهيز من شيت التوزيع الشهري (ريد + يوز، والنت البكج اليومي فقط). الباقي = التجهيز الكلي − التفعيل الكلي")
+    st.caption("الباقي من الشيت الأول (ريد + يوز، والنت البكج اليومي فقط). التجهيز الكلي = الباقي + التفعيل الكلي")
     mini, has_m = mini_report(res)
-    if not has_m:
-        st.warning("ما أكو شيت توزيع شهري (ارفعي التوزيع بالتبويب الأول)، فالتجهيز طالع صفر")
     show_table(mini)
     st.download_button("تحميل التقرير المصغّر (إكسل)", data=format_excel(mini), file_name=report_file_name(),
                        mime=XLSX_MIME, key="dl_mini")
