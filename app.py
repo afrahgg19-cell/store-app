@@ -2297,6 +2297,9 @@ def kpi_table(res, tg):
     for key, label in [("net", "تاركت نت (نقاط)"), ("red", "تاركت ريد (نقاط)"), ("use", "تاركت يوز (نقاط)")]:
         rows.append(kpi_row(label, float(tg.get(key, 0) or 0), ach[key] if has_pts else None,
                             elapsed, total_days, True))
+    rows.append(kpi_row("تاركت الاتصال (ريد + يوز) نقاط",
+                        float(tg.get("red", 0) or 0) + float(tg.get("use", 0) or 0),
+                        (ach["red"] + ach["use"]) if has_pts else None, elapsed, total_days, True))
     wal_done = int((res[T["wal"]] == "done").sum()) if T["wal"] in res.columns else None
     inc_done = int((res[T["inc"]] == "done").sum()) if T["inc"] in res.columns else None
     rows.append(kpi_row("تاركت المحفظة (عدد المكاتب)", float(tg.get("wal", 0) or 0), wal_done, None, None, False))
@@ -2535,7 +2538,7 @@ def kpi_page():
             st.success("انحفظ") if (ok1 and ok2) else st.warning("ما كدرت أحفظ على السيرفر، يبقى للجلسة الحالية بس")
     tg = {"net": t_net, "red": t_red, "use": t_use, "wal": t_wal, "inc": t_inc}
     kt, elapsed, total_days = kpi_table(res, tg)
-    cards = st.columns(5)
+    cards = st.columns(len(kt))
     for col, (_, r) in zip(cards, kt.iterrows()):
         with col:
             pct = r["النسبة %"]
