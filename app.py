@@ -2392,8 +2392,12 @@ def mini_report(res):
     out["تفعيل كلي نت"] = act_net.astype(int).values
     out["باقي خط اتصال"] = rem_call.astype(int).values
     out["باقي خط نت"] = rem_net.astype(int).values
+    dl, dn = num_col(res, T["last_ru"]), num_col(res, T["last_net"])
+    out["التفعيل اليومي خط"] = (dl if dl is not None else zero).astype(int).values
+    out["التفعيل اليومي نت"] = (dn if dn is not None else zero).astype(int).values
     out[T["wal"]] = res[T["wal"]].values if T["wal"] in res.columns else [""] * n
     out[T["inc"]] = res[T["inc"]].values if T["inc"] in res.columns else [""] * n
+    out = out.sort_values("تفعيل كلي اتصال", ascending=False, kind="stable").reset_index(drop=True)
     return out, True
 
 
