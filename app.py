@@ -2325,6 +2325,7 @@ def build_all_zip(res, call_df, need_df):
         z.writestr("need_lines.xlsx", format_excel(need_df))
         kt, _, _ = kpi_table(res, saved_targets_all())
         z.writestr("kpi.xlsx", format_excel(kt))
+        z.writestr("mini_report.xlsx", format_excel(mini_report(res)[0]))
         reps = clean_rep(res[T["rep"]]) if T["rep"] in res.columns else pd.Series(["بدون مندوب"] * len(res))
         for i, rep in enumerate(sorted(set(reps)), start=1):
             sub = res[(reps == rep).values]
@@ -2332,63 +2333,72 @@ def build_all_zip(res, call_df, need_df):
     return buf.getvalue()
 
 
-def guess_report_type(df):
-    n, c = len(df), df.shape[1]
-    if n == 0 or c == 0:
-        return "فارغ", ""
-
-    def frac(series, test):
-        s = series.dropna().astype(str)
-        return float(s.map(test).mean()) if len(s) else 0.0
-
-    def phone(v):
-        return len(re.sub(r"\D", "", v)) >= 9
-
-    def number(v):
-        try:
-            float(v.replace(",", ""))
-            return True
-        except Exception:
-            return False
-
-    if c >= 4 and frac(df.iloc[:, 1], lambda v: clean_code(v) in QUALITY_TYPE) >= 0.5:
-        return "كوالتي", T["up_quality"]
-    if c >= 9 and frac(df.iloc[:, 4], lambda v: v.strip().lower() in ("distributed", "activated", "active")) >= 0.3:
-        return "توزيع", T["up_dist"]
-    idx, hits = detect_bundle_col(df)
-    if idx is not None and hits >= 1:
-        return "باقات", T["up_bnd"]
-    if c >= 8 and frac(df.iloc[:, 0], phone) >= 0.7 and frac(df.iloc[:, 7], number) >= 0.7:
-        return "حافز", T["up_inc"]
-    if c >= 6 and frac(df.iloc[:, 3], phone) >= 0.7 and frac(df.iloc[:, 5], number) >= 0.7:
-        return "محافظ", T["up_wal"]
-    if c >= 3 and frac(df.iloc[:, 1], phone) >= 0.7:
-        return "وكلاء", T["up_agents"]
-    if c <= 3 and frac(df.iloc[:, 0], phone) >= 0.7:
-        return "ايف ستوك", T["up_live"]
-    return "غير معروف", ""
-
-
-def files_checker():
-    st.subheader("فحص الملفات (تسهيل)")
-    st.caption("ارفعي كل الملفات هنا مرة وحدة، والأداة تخمّن نوع كل ملف وتقول بأي خانة يروح (تخمين، مو ملزم)")
-    files = st.file_uploader("ملفات للفحص", accept_multiple_files=True, key="chk_files")
-    if not files:
-        return
+def rep_perf(d, tg):
+    # performance per rep: active offices %, share of points, and performance vs the average office
+    reps = d[T["rep"]]
+    n_all = len(d)
+    tot_pts = float(d["النقاط"].sum())
+    avg_all = tot_pts / n_all if n_all else 0
+    tgt_all = sum(float(tg.get(k, 0) or 0) for k in ("net", "red", "use"))
     rows = []
-    for f in files:
-        sheets = load_report(f, "فحص")
-        if sheets is None:
-            rows.append({"الملف": f.name, "النوع المتوقع": "ما انقرا", "الخانة": "", "الصفوف": "", "الأعمدة": "", "الشيتات": ""})
-            continue
-        first = list(sheets.values())[0]
-        kind, slot = guess_report_type(first)
-        note = ""
-        if kind == "توزيع" and first.shape[1] < 9:
-            note = "أعمدته أقل من 9"
-        rows.append({"الملف": f.name, "النوع المتوقع": kind, "الخانة": slot, "الصفوف": len(first),
-                     "الأعمدة": first.shape[1], "الشيتات": len(sheets), "ملاحظة": note})
-    st.dataframe(pd.DataFrame(rows), use_container_width=True)
+    for rep in sorted(set(reps)):
+        sub = d[reps == rep]
+        n = len(sub)
+        act = int((sub["مجموع التفعيل"] > 0).sum())
+        pts = float(sub["النقاط"].sum())
+        row = {
+            "المندوب": rep,
+            "عدد المكاتب": n,
+            "مكاتب فعّالة": act,
+            "نسبة المكاتب الفعّالة %": round(act / n * 100, 1) if n else 0,
+            "مجموع التفعيل": int(sub["مجموع التفعيل"].sum()),
+            "النقاط": round(pts, 1),
+            "حصته من النقاط %": round(pts / tot_pts * 100, 1) if tot_pts else 0,
+            "نسبة الأداء %": round((pts / n) / avg_all * 100, 1) if (n and avg_all) else 0,
+        }
+        if tgt_all > 0 and n_all:
+            row["نسبة من التاركت الموزّع %"] = round(pts / (tgt_all * n / n_all) * 100, 1)
+        rows.append(row)
+    out = pd.DataFrame(rows).sort_values("نسبة الأداء %", ascending=False, kind="stable")
+    return out.reset_index(drop=True)
+
+
+def mini_report(res):
+    # small report: total prep (red+use) and net package prep from the monthly distribution sheet,
+    # total activation, remaining lines = prep - activation, plus wallet and incentive
+    n = len(res)
+    zero = pd.Series([0] * n)
+    out = pd.DataFrame({
+        T["office_name"]: res[T["office_name"]].values,
+        T["office_no"]: res[T["office_no"]].values,
+        T["rep"]: (clean_rep(res[T["rep"]]).values if T["rep"] in res.columns else ["بدون مندوب"] * n),
+    })
+    prep_call = zero.copy()
+    prep_net = zero.copy()
+    m = res.attrs.get("monthly")
+    if m is not None and len(m) > 0:
+        mm = m.set_index(T["office_no"])
+        keys = res[T["office_no"]].values
+        def pick(cols):
+            tot = pd.Series([0] * n)
+            for c in cols:
+                if c in mm.columns:
+                    tot = tot + pd.Series([mm[c].get(k, 0) for k in keys]).fillna(0)
+            return tot
+        prep_call = pick([RED, USE])
+        prep_net = pick([DAILY])
+    ar, au, an = num_col(res, T["act_red"]), num_col(res, T["act_use"]), num_col(res, T["act_net"])
+    act_call = (ar if ar is not None else zero) + (au if au is not None else zero)
+    act_net = an if an is not None else zero
+    out["التجهيز الكلي (يوز + ريد)"] = prep_call.astype(int).values
+    out["تجهيز النت (البكج)"] = prep_net.astype(int).values
+    out["تفعيل كلي اتصال"] = act_call.astype(int).values
+    out["تفعيل كلي نت"] = act_net.astype(int).values
+    out["باقي خط اتصال"] = (prep_call - act_call).astype(int).values
+    out["باقي خط نت"] = (prep_net - act_net).astype(int).values
+    out[T["wal"]] = res[T["wal"]].values if T["wal"] in res.columns else [""] * n
+    out[T["inc"]] = res[T["inc"]].values if T["inc"] in res.columns else [""] * n
+    return out, (m is not None and len(m) > 0)
 
 
 def random_page():
@@ -2396,7 +2406,6 @@ def random_page():
     res = st.session_state.get("last_result")
     if res is None:
         st.info("احسبي بالتبويب الأول (الرئيسي) أولاً، وبعدها تطلع هنا التنبيهات واللوحة والقوائم")
-        files_checker()
         return
     low = st.number_input("نبّه إذا الباقي من الخط أقل أو يساوي", min_value=0, value=2, step=1, key="rnd_low")
     d, call_df, need_df, has_q, has_stock = alerts_frame(res, low)
@@ -2473,6 +2482,15 @@ def random_page():
     st.download_button("تحميل قائمة الخطوط (إكسل)", data=format_excel(need_df),
                        file_name="need_lines.xlsx", mime=XLSX_MIME, key="dl_need")
 
+    if has_q:
+        st.subheader("نسبة أداء كل مندوب")
+        st.caption("نسبة الأداء = معدل نقاط مكتب المندوب ÷ معدل نقاط المكتب العام × 100 (100% = مثل المعدل). نسبة التاركت تظهر إذا حددتي التاركت بتبويب كيبي اي")
+        perf = rep_perf(d, saved_targets_all())
+        show_table(perf)
+        st.bar_chart(perf.set_index("المندوب")[["نسبة الأداء %"]])
+        st.download_button("تحميل أداء المندوبين (إكسل)", data=format_excel(perf),
+                           file_name="rep_performance.xlsx", mime=XLSX_MIME, key="dl_perf")
+
     st.subheader("تقرير جاهز لكل مندوب")
     reps = clean_rep(res[T["rep"]]) if T["rep"] in res.columns else pd.Series(["بدون مندوب"] * len(res))
     rep_names = sorted(set(reps))
@@ -2489,7 +2507,6 @@ def random_page():
         st.download_button("تحميل الكل (ZIP)", data=build_all_zip(res, call_df, need_df),
                            file_name="all_reports.zip", mime="application/zip", key="dl_zip")
 
-    files_checker()
 
 
 def kpi_page():
@@ -2534,6 +2551,15 @@ def kpi_page():
         st.caption("التوقع = المحقق ÷ الأيام اللي مضت ({}) × أيام الشهر ({}). الأيام من آخر تاريخ بتقرير الكوالتي، والنقاط من الشيت الأول".format(elapsed, total_days))
     st.download_button("تحميل الكيبي اي (إكسل)", data=format_excel(kt), file_name="kpi.xlsx",
                        mime=XLSX_MIME, key="dl_kpi")
+
+    st.subheader("التقرير المصغّر")
+    st.caption("التجهيز من شيت التوزيع الشهري (ريد + يوز، والنت البكج اليومي فقط). الباقي = التجهيز الكلي − التفعيل الكلي")
+    mini, has_m = mini_report(res)
+    if not has_m:
+        st.warning("ما أكو شيت توزيع شهري (ارفعي التوزيع بالتبويب الأول)، فالتجهيز طالع صفر")
+    show_table(mini)
+    st.download_button("تحميل التقرير المصغّر (إكسل)", data=format_excel(mini), file_name=report_file_name(),
+                       mime=XLSX_MIME, key="dl_mini")
 
 
 def main_page():
